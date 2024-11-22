@@ -1,0 +1,90 @@
+---
+title: "FR_lengths"
+author: "Maria Garcia"
+date: "2024-06-04"
+output: html_document
+---
+
+```{r}
+source("library.R")
+```
+
+```{r}
+length<- read.csv("data/FR.length.csv")
+Condition <- read.csv("data/Mono.Mix.csv")
+
+length <- merge(length, Condition, by = "Site")
+
+length<- separate(length, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+length$Zone <- factor(length$Zone, levels = c("H", "M", "L"))
+
+length<-length %>%
+  unite("Species.Comp", c("Species","Condition"), remove = FALSE)
+length$Species.Comp <- factor(length$Species.Comp, levels =c('ZJ_monoculture', 'ZJ_mixture', 'ZM_mixture', 'ZM_monoculture') )
+
+len.mono <- filter(length, Condition == "monoculture")
+len.mono.anova<- aov(Length~Site*Zone*Species, data = len.mono)
+summary(len.mono.anova)
+
+len.zm <- filter(length, Species == "ZM")
+len.zm.anova<- aov(Length~Site*Zone*Condition, data = len.zm)
+summary(len.zm.anova)
+
+len.zj <- filter(length, Species == "ZJ")
+len.zj.anova.l<- aov(Length~Site*Zone*Condition, data = len.zj)
+summary(len.zj.anova.l)
+
+```
+
+
+
+```{r}
+len.mono.mean<- len.mono %>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(Length, na.rm = T), n = length(Length)-sum(is.na(Length)), 
+            sd = sd(Length, na.rm = T), se= sd/sqrt(n) )
+
+len.mono.mean$Species <- factor(len.mono.mean$Species, levels = c("ZJ", "ZM"), labels = c("Non-native", "Native"))
+g_len<- ggplot(len.mono.mean, aes(x=Zone, y= mean, group = Site))+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Length (cm)")+ facet_grid(col= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75))  +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species, shape = Site), size = 4,  show.legend = FALSE) + theme_better + scale_shape_manual(values = c(22, 25)) + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm"))
+plot(g_len)
+ggsave("figures/len.mono.2.pdf", width = 6, height = 4.27)
+```
+
+```{r}
+library(esc)
+Len_mean<- length%>%
+  group_by(`Site`,`Zone`, `Species`, `Condition`)%>%
+  summarise(mean = mean(Length, na.rm = T), n = length(Length)-sum(is.na(Length)), 
+            sd = sd(Length, na.rm = T), se= sd/sqrt(n) )
+
+Len.mean.mix <- Len_mean %>% filter(Condition == "mixture")
+colnames(Len.mean.mix) <- c("Site", "Zone", "Species", "Condition", "mix.mean", 
+             "mix.n", "mix.sd", "mix.se")
+Len.mean.mono <- Len_mean %>% filter(Condition == "monoculture")
+colnames(Len.mean.mono) <- c("Site", "Zone", "Species", "Condition", "mono.mean", 
+             "mono.n", "mono.sd", "mono.se")
+Len.effect.df <- merge(Len.mean.mix, Len.mean.mono, by = c("Site", "Zone", "Species"))
+
+
+Len.effect<- esc_mean_sd(grp1m = Len.effect.df$mono.mean, grp2m = Len.effect.df$mix.mean,
+            grp1sd = Len.effect.df$mono.sd, grp2sd = Len.effect.df$mix.sd, 
+            grp1n = Len.effect.df$mono.n, grp2n = Len.effect.df$mix.n)
+
+
+#comp_mean<- effect.size %>%
+  #group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  #summarise(mean = mean(GRAMS, na.rm = T), n = length(GRAMS)-sum(is.na(GRAMS)), 
+            #sd = sd(GRAMS, na.rm = T), se= sd/sqrt(n) )
+
+e.size <- cbind(Len.effect.df, "Effect.size" =Len.effect$es, "Weight" = Len.effect$w, "Lower.CI" = Len.effect$ci.lo, "Upper.CI" = Len.effect$ci.hi)
+e.size
+```
+
+```{r}
+e.size$Species <- factor(e.size$Species, levels = c("ZJ", "ZM"), labels = c("Non-native", "Native")) 
+
+efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Site))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Site, fill = Species), size = 4,show.legend = FALSE) + ylim(c(-5.5, 3)) + scale_shape_manual(values = c(22, 25)) +  scale_fill_manual(values = c("white", "black")) 
+plot(efect.g) 
+
+ggsave("figures/len.es.2.pdf", width = 6, height = 4.27)
+```

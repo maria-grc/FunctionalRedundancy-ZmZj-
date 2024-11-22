@@ -1,0 +1,58 @@
+---
+title: "Non-Native"
+author: "Maria Garcia"
+date: '2023-04-02'
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(vegan)
+library(grid)
+library(lattice)
+library(tibble)
+library(cowplot)
+library(gridExtra)
+```
+
+
+
+```{r}
+non.native <- read.csv("functional.epifauna.csv")
+
+non.native<- separate(non.native, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+
+
+non.mono <- filter(non.native, Condition == "Mono")
+non.mono.anova<- aov(asin(sqrt(Invasive))~Site*Zone*Species, data = non.mono)
+summary(non.mono.anova)
+# glm.mono<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Species, data = non.mono, family = "binomial") 
+# summary(glm.mono)
+# summary(aov(glm.mono))
+
+
+non.zm <- filter(non.native, Species == "ZM")
+non.zm.anova<- aov(asin(sqrt(Invasive))~Site*Zone*Condition, data = non.zm)
+summary(non.zm.anova)
+# glm.zm<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Condition, data = non.zm, family = "binomial") 
+# summary(glm.zm)
+# summary(aov(glm.zm))
+ 
+
+non.zj <- filter(non.native, Species == "ZJ")
+non.zj.anova<- aov(asin(sqrt(Invasive))~ Site*Zone*Condition, data = non.zj)
+summary(non.zj.anova)
+# glm.zj<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Condition, data = non.zj, family = "binomial") 
+# anova(glm.zj)
+# aov(glm.zj)
+# summary(aov(glm.zj))
+# 
+# glm.zj.2<- glm(cbind(sum.non.int, sum.native.int )~ Site*Zone + Site*Condition+ Zone*Condition, data = non.zj, family = "binomial") 
+# summary(glm.zj.2)
+# 
+# anova(glm.zj, glm.zj.2, test="Chisq")
+```
+
+

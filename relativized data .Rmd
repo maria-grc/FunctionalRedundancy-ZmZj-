@@ -1,0 +1,322 @@
+---
+title: "Relativing"
+author: "Maria Garcia"
+date: '2023-03-30'
+output: html_document
+---
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(vegan)
+library(grid)
+library(lattice)
+library(tibble)
+library(cowplot)
+library(gridExtra)
+```
+
+  Statsitics for the intial community data
+```{r}
+ad.initial<- read.csv("ad.initial.observation.csv")
+sep.in<- separate(ad.initial, col=site, into=c( 'Site','Zone', 'Species', 'Number'))
+sep.in[,6:15] <- sep.in[,6:15]/sep.in$Z.weight
+
+adjusted<- unite(sep.in, "Species.zone", c("Species", "Zone"))
+adjusted$Species.zone <- factor(adjusted$Species.zone, levels =c('ZJ_H', 'ZJ_M', 'ZM_M', 'ZM_L'))
+adjusted<- cbind(Zone=sep.in$Zone, Species= sep.in$Species, adjusted)
+```
+
+
+```{r}
+adjusted$lacuna.spp<-adjusted$lacuna.spp/max(adjusted$lacuna.spp)
+adjusted$Ampithoe.valida<-adjusted$Ampithoe.valida/max(adjusted$Ampithoe.valida)
+adjusted$Monocorophium.spp <-adjusted$Monocorophium.spp/max(adjusted$Monocorophium.spp)
+adjusted$Ampipod<-adjusted$Ampipod/max(adjusted$Ampipod)
+adjusted$Paracorophium.spp<- adjusted$Paracorophium.spp/max(adjusted$Paracorophium.spp)
+adjusted$Tanaidacea <- adjusted$Tanaidacea/max(adjusted$Tanaidacea)
+adjusted$Polynoidae <- adjusted$Polynoidae/max(adjusted$Polynoidae)
+adjusted$Photis.spp <- adjusted$Photis.spp/max(adjusted$Photis.spp)
+adjusted$Syllidae <- adjusted$Syllidae/max(adjusted$Syllidae)
+adjusted$Grandidierella.japonica <- adjusted$Grandidierella.japonica/max(adjusted$Grandidierella.japonica)
+```
+
+
+```{r}
+zj.in <- filter(adjusted, Species == "ZJ")
+perm.zj<-adonis2(log1p(zj.in[,7:16]) ~ Site*Zone,
+       permutations = 9999, 
+       method = "bray",
+       data= zj.in)
+perm.zj
+
+zm.in <- filter(adjusted, Species == "ZM")
+perm.m<-adonis2(log1p(zm.in[,7:16]) ~ Site*Zone,
+       permutations = 9999, 
+       method = "bray",
+       data= zm.in)
+perm.m
+
+mid.in <- filter(adjusted, Zone == "M")
+perm.mid<-adonis2(log1p(mid.in[,7:16]) ~ Site*Species,
+       permutations = 9999, 
+       method = "bray",
+       data= mid.in)
+perm.mid
+```
+
+```{r}
+sp.in <- filter(adjusted, Site == "SP")
+
+model.mds.1<-metaMDS(sp.in[,7:16]^1/4, dist="bray", k=2, try=40, data = sp.in)
+
+samplescores.df<-scores(model.mds.1)
+sp.scores <- cbind(sp.in[,1:4], samplescores.df$sites)
+
+observation<- ggplot(sp.scores, aes(x=NMDS1, y=NMDS2, color=Zone, shape= Species.zone))+geom_point(size =2 )+scale_shape_manual(values = c(21, 24, 17,16),name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+ theme_better +ggtitle("Stackpole")
+plot(observation)
+
+```
+
+
+```{r}
+sv.in <- filter(adjusted, Site == "SV")
+
+sv.model.mds.1<-metaMDS(sv.in[,7:16]^1/4, dist="bray", k=2, try=40, data = sv.in)
+
+
+samplescores.df<-scores(sv.model.mds.1)
+new <- cbind(sv.in[,1:4], samplescores.df$sites)
+observation<- ggplot(new, aes(x=NMDS1, y=NMDS2, color=Zone, shape= Species.zone))+geom_point(size =2 )+scale_shape_manual(values = c(21, 24, 17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+ theme_better +ggtitle("Sloughville")
+plot(observation)
+
+```
+
+
+
+```{r}
+epifauna<- read.csv("functional.epifauna.csv")
+ep.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+ep.stand[,6:38] <- ep.stand[,6:38]/ep.stand$Z.Weight
+```
+
+
+relativize
+```{r}
+ep.stand$Tanaidacea<- ep.stand$Tanaidacea/max(ep.stand$Tanaidacea)
+ep.stand$Syllidae.Hesionidae <- ep.stand$Syllidae.Hesionidae/max(ep.stand$Syllidae.Hesionidae)
+ep.stand$Monocorophium.spp.<- ep.stand$Monocorophium.spp/max(ep.stand$Monocorophium.spp)
+ep.stand$Paracorophium.spp.<- ep.stand$Paracorophium.spp./max(ep.stand$Paracorophium.spp.)
+ep.stand$Ampithoe.valida <- ep.stand$Ampithoe.valida/max(ep.stand$Ampithoe.valida)
+ep.stand$Caprella.californica <- ep.stand$Caprella.californica/max(ep.stand$Caprella.californica)
+ep.stand$Juvenile.caprellid <- ep.stand$Juvenile.caprellid/max(ep.stand$Juvenile.caprellid)
+
+```
+
+```{r}
+epifauna<- read.csv("adjusted.ef.csv")
+ep.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+ep.stand[,6:12] <- ep.stand[,6:12]/ep.stand$Z.Weight
+high<- filter(ep.stand, Condition == "mono" & Species == "ZJ" & Zone == "H")
+mid<- filter(ep.stand, Condition == "mix" & Zone == "M")
+low<- filter(ep.stand, Condition == "mono" & Species == "ZM" & Zone == "L")
+ef.zone.2 <-  rbind(high, mid,low)
+ef.zone.2$Zone<- factor(ef.zone.2$Zone, levels = c('H', 'M' , 'L'))
+
+ep.mid<- filter(ef.zone.2, Zone== "M")
+
+perm.m<-adonis2(log1p(ep.mid[,6:38]) ~ Site*Species,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.mid)
+perm.m
+
+ep.zm <- filter(ef.zone.2, Species == "ZM",  Zone != "H")
+perm.zm<-adonis2(log1p(ep.zm[,6:38]) ~ Site*Zone,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.zm)
+perm.zm
+
+ep.zj <- filter(ef.zone.2, Species == "ZJ",  Zone != "L")
+perm.zj<-adonis2(log1p(ep.zj[,6:12]) ~ Site*Zone,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.zj)
+perm.zj
+```
+
+```{r}
+
+ep.mono<- filter(ep.stand, Condition == "mono")
+
+perm.m<-adonis2(log1p(ep.mono[,6:12]) ~ Site*Zone*Species,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.mono)
+perm.m
+
+ep.zm <- filter(ep.stand, Species == "ZM")
+perm.zm<-adonis2(log1p(ep.zm[,6:12]) ~ Site*Zone*Condition,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.zm)
+perm.zm
+
+ep.zj <- filter(ep.stand, Species == "ZJ")
+perm.zj<-adonis2(log1p(ep.zj[,6:12]) ~ Site*Zone*Condition,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.zj)
+perm.zj
+```
+
+
+
+
+
+```{r}
+sph.mono <- filter(ep.mono, Site == "SP" & Zone == "H")
+perm.sph <- adonis2(log1p(sph.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= sph.mono)
+perm.sph 
+
+spm.mono <- filter(ep.mono, Site == "SP" & Zone == "M")
+perm.spm <- adonis2(log1p(spm.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= spm.mono)
+perm.spm
+
+spl.mono <- filter(ep.mono, Site == "SP" & Zone == "L")
+perm.spl <- adonis2(log1p(spl.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= spl.mono)
+perm.spl
+
+
+svh.mono <- filter(ep.mono, Site == "SV" & Zone == "H")
+perm.svh <- adonis2(log1p(svh.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svh.mono)
+perm.svh
+
+svm.mono <- filter(ep.mono, Site == "SV" & Zone == "M")
+perm.svm <- adonis2(log1p(svm.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svm.mono)
+perm.svm
+
+svl.mono <- filter(ep.mono, Site == "SV" & Zone == "L")
+perm.svl <- adonis2(log1p(svl.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svl.mono)
+perm.svl
+
+```
+
+```{r}
+
+sp.ef <- filter(ep.stand, Site == "SP")
+
+sp.model.mds.1<-metaMDS(sp.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sp.ef)
+sp.samplescores.df<-scores(sp.model.mds.1)
+sp<- cbind(ep.stand[1:72,1:5],sp.samplescores.df$sites)
+sp.ef.g<- unite(sp, "Species.comp", c("Species", "Condition"))
+sp.ef.g$Species.comp <- factor(sp.ef.g$Species.comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21, 24, 17,16 ), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture") )+theme_better+ ggtitle("Stackpole")+ stat_ellipse(aes(x=NMDS1, y=NMDS2,color=Zone), level=0.95)
+plot(sp.observation)
+
+
+```
+
+
+
+```{r}
+sp.ef <- filter(ep.stand, Site == "SP")
+
+sp.model.mds.1<-metaMDS(sp.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sp.ef)
+sp.samplescores.df<-scores(sp.model.mds.1)
+sp<- cbind(ep.stand[1:72,1:5],sp.samplescores.df$sites)
+sp.ef.g<- unite(sp, "Species.comp", c("Species", "Condition"))
+sp.ef.g$Species.comp <- factor(sp.ef.g$Species.comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+sp.ef.g$Zone<- factor(sp.ef.g$Zone, levels =c('H', 'M', 'L'))
+
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21, 24, 17,16 ), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture") )+theme_better+ ggtitle("Stackpole")
+plot(sp.observation)
+
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21, 24, 17,16 ), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture") )+theme_better+ ggtitle("Stackpole")+ stat_ellipse(aes(x=NMDS1, y=NMDS2,color=Zone), level=0.95)
+plot(sp.observation)
+```
+
+```{r}
+sv.ef <- filter(ep.stand, Site == "SV")
+
+
+sv.model.mds.1<-metaMDS(sv.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sv.ef)
+sv.samplescores.df<-scores(sv.model.mds.1)
+sv <- cbind(ep.stand[73:140,1:5],sv.samplescores.df$sites)
+sv.ef.g<- unite(sv, "Species.comp", c("Species", "Condition"))
+sv.ef.g$Species.comp <- factor(sv.ef.g$Species.comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+sv.ef.g$Zone<- factor(sv.ef.g$Zone, levels =c('H', 'M', 'L'))
+
+sv.observation<- ggplot(sv.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+theme_better+ ggtitle("Sloughville")
+plot(sv.observation)
+
+sv.observation<- ggplot(sv.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+theme_better+ ggtitle("Sloughville") + stat_ellipse() 
+plot(sv.observation)
+```
+```{r}
+
+sp.ef <- filter(ep.stand, Site == "SP")
+
+sp.model.mds.1<-metaMDS(sp.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sp.ef)
+sp.samplescores.df<-scores(sp.model.mds.1)
+sp<- cbind(ep.stand[1:72,1:5],sp.samplescores.df$sites)
+sp.ef.g<- unite(sp, "Species.comp", c("Species", "Condition"))
+sp.ef.g$Species.comp <- factor(sp.ef.g$Species.comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+sp.ef.g$Zone<- factor(sp.ef.g$Zone, levels =c('H', 'M', 'L'))
+
+sp.h<- filter(sp.ef.g, Zone == "H", Species.comp == "ZJ_mono")
+sp.m.zm<- filter(sp.ef.g, Zone == "M", Species.comp ==  "ZM_mix")
+sp.m.zj<- filter(sp.ef.g, Zone == "M", Species.comp ==  "ZJ_mix")
+sp.l <- filter(sp.ef.g, Zone == "L", Species.comp == "ZM_mono")
+sp.zone <- rbind(sp.h, sp.m.zm, sp.m.zj, sp.l)
+
+sp.observation<- ggplot(sp.zone, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+theme_better+ ggtitle("Stackpole") #+ stat_ellipse() 
+plot(sp.observation)
+```
+
+
+```{r}
+sv.ef <- filter(ep.stand, Site == "SV")
+
+
+sv.model.mds.1<-metaMDS(sv.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sv.ef)
+sv.samplescores.df<-scores(sv.model.mds.1)
+sv <- cbind(ep.stand[73:140,1:5],sv.samplescores.df$sites)
+sv.ef.g<- unite(sv, "Species.comp", c("Species", "Condition"))
+sv.ef.g$Species.comp <- factor(sv.ef.g$Species.comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+sv.ef.g$Zone<- factor(sv.ef.g$Zone, levels =c('H', 'M', 'L'))
+
+sv.h<- filter(sv.ef.g, Zone == "H", Species.comp == "ZJ_mono")
+sv.m.zm<- filter(sv.ef.g, Zone == "M", Species.comp ==  "ZM_mix")
+sv.m.zj<- filter(sv.ef.g, Zone == "M", Species.comp ==  "ZJ_mix")
+sv.l <- filter(sv.ef.g, Zone == "L", Species.comp == "ZM_mono")
+sv.zone <- rbind(sv.h, sv.m.zm, sv.m.zj, sv.l)
+
+sv.observation<- ggplot(sv.zone, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+theme_better+ ggtitle("Sloughville") #+ stat_ellipse() 
+plot(sv.observation)
+```
+
+

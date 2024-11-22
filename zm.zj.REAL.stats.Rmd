@@ -1,0 +1,1169 @@
+---
+title: "zm.zj.REAL.stats"
+author: "Maria Garcia"
+date: '2022-11-22'
+output: html_document
+---
+
+
+To what extent can the two species provide the same habitat. Is this due to the 
+zonation or is this due to the identity of species?
+Overall the questions are:
+  1. What are the zonation patterns 
+  2. Can the two species provide the same habitat 
+  3. How does growing next to each other change things? 
+  
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(vegan)
+library(grid)
+library(lattice)
+library(tibble)
+library(cowplot)
+library(gridExtra)
+library(emmeans)
+```
+```{r}
+theme_better <- theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        text = element_text(color = "black"))
+```
+
+
+Inital epifaunal community 
+  NMDS plots for the inital epifuanal communtiy
+```{r}
+ad.initial<- read.csv("ad.initial.observation.csv")
+adjusted<- separate(ad.initial, col=site, into=c( 'Site','Zone', 'Species','Number'))
+adjusted[,6:15] <- adjusted[,6:15]/adjusted$Z.weight
+sp.in <- filter(adjusted, Site == "SP")
+
+model.mds.1<-metaMDS(sp.in[,6:15]^1/4, dist="bray", k=2, try=40, data = sp.in)
+
+samplescores.df<-scores(model.mds.1)
+new <- cbind(sp.in[,1:4], samplescores.df)
+observation<- ggplot(new, aes(x=NMDS1, y=NMDS2, color=Species, shape=`Zone`))+geom_point(size =2 )+scale_shape_manual(values = c(15,16, 17))+ theme_better +ggtitle("Stackpole")
+plot(observation)
+
+```
+```{r}
+ad.initial<- read.csv("ad.initial.observation.csv")
+adjusted<- separate(ad.initial, col=site, into=c( 'Site','Zone', 'Species','Number'))
+adjusted[,6:15] <- adjusted[,6:15]/adjusted$Z.weight
+sv.in <- filter(adjusted, Site == "SV")
+
+sv.model.mds.1<-metaMDS(sv.in[,6:15]^1/4, dist="bray", k=2, try=40, data = sv.in)
+
+sv.samplescores.df<-scores(sv.model.mds.1)
+sv <- cbind(sv.in[,1:4], sv.samplescores.df)
+observation<- ggplot(sv, aes(x=NMDS1, y=NMDS2, col=Species,shape=`Zone`))+geom_point(size= 2)+scale_shape_manual(values = c(15,16, 17))+theme_better + ggtitle("Sloughville")
+plot(observation)
+```
+
+  Statsitics for the intial community data
+```{r}
+ad.initial<- read.csv("ad.initial.observation.csv")
+adjusted<- separate(ad.initial, col=site, into=c( 'Site','Zone', 'Species', 'Number'))
+adjusted[,6:15] <- adjusted[,6:15]/adjusted$Z.weight
+zj.in <- filter(adjusted, Species == "ZJ")
+perm.zj<-adonis2(log1p(zj.in[,6:15]) ~ Site*Zone,
+       permutations = 9999, 
+       method = "bray",
+       data= zj.in)
+perm.zj
+
+zm.in <- filter(adjusted, Species == "ZM")
+perm.m<-adonis2(log1p(zm.in[,6:15]) ~ Site*Zone,
+       permutations = 9999, 
+       method = "bray",
+       data= zm.in)
+perm.m
+
+mid.in <- filter(adjusted, Zone == "M")
+perm.mid<-adonis2(log1p(mid.in[,6:15]) ~ Site*Species,
+       permutations = 9999, 
+       method = "bray",
+       data= mid.in)
+perm.mid
+```
+  
+  graph for non-native initial
+```{r}
+non.native.in <- cbind(adjusted[1:4], adjusted[17], adjusted[19:22])
+non.native.in$Zone<- factor(non.native.in$Zone, levels= (c('H', 'M', 'L')))
+#nn<- non.native %>%
+  #unite("Species.Zone", Species:Zone)
+#non.native.2 <- cbind(nn, Species=non.native$Species)
+#non.native.2$Species.Zone <- factor(non.native.2$Species.Zone, levels =c('ZJ_H', 'ZJ_M', 'ZM_M', 'ZM_L'))
+
+glm.non.zone.in<- glm(cbind(sum.non, sum.native )~Site * Zone, data = non.native.in, family = "binomial") 
+summary(glm.non.zone.in)
+
+glm.non.zone.in.int<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone, data = non.native.in, family = "binomial") 
+summary(glm.non.zone.in.int)
+
+int_mean<- non.native.in %>%
+  group_by(`Site`,`Zone`, `Species`)%>%
+  summarise(mean = mean(sum.non.int, na.rm = T), n = length(sum.non.int)-sum(is.na(sum.non.int)), 
+            sd = sd(sum.non.int, na.rm = T), se= sd/sqrt(n) )
+int_mean
+
+non_mean<- non.native.in %>%
+  group_by(`Site`,`Zone`, `Species`)%>%
+  summarise(mean = mean(Invasives, na.rm = T), n = length(Invasives)-sum(is.na(Invasives)), 
+            sd = sd(Invasives, na.rm = T), se= sd/sqrt(n) )
+g_non_in<- ggplot(non_mean, aes(x=Zone, y= mean))+geom_point(stat="identity", position= position_dodge(0.5), aes(shape = Species), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5, group = Species), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, aes(group=Species))+ xlab("Zone")+ylab("Proportion of Non-Native Epifauna")+ facet_grid(col= vars(Site), rows = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,16)) + theme_better
+plot(g_non_in)
+```
+
+  statistics non-native initial epifaunal community
+```{r}
+
+mid.non <- filter(non.native.in, Zone == "M")
+glm.mid.non<- glm(cbind(sum.non.int, sum.native.int )~Site * Species, data = mid.non, family = "binomial") 
+summary(glm.mid.non)
+summary(aov(glm.mid.non))
+
+zm.non <- filter(non.native.in, Species == "ZM")
+glm.zm.non<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone, data = zm.non, family = "binomial") 
+summary(glm.zm.non) 
+summary(aov(glm.zm.non))
+
+zj.non <- filter(non.native.in, Species == "ZJ")
+glm.zj.non<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone, data = zj.non, family = "binomial") 
+summary(glm.zj.non)
+summary(aov(glm.zj.non))
+```
+
+```{r}
+crust.in <- cbind(adjusted[1:4], adjusted[18])
+crust.in$Zone<- factor(adjusted$Zone, levels= (c('H', 'M', 'L')))
+
+crust_mean<- crust.in %>%
+  group_by(`Site`,`Zone`, `Species`)%>%
+  summarise(mean = mean(Crustaceans, na.rm = T), n = length(Crustaceans)-sum(is.na(Crustaceans)), 
+            sd = sd(Crustaceans, na.rm = T), se= sd/sqrt(n) )
+g_non_in<- ggplot(crust_mean, aes(x=Zone, y= mean))+geom_point(stat="identity", position= position_dodge(0.5), aes(shape = Species, group=Species))+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5, group = Species), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, aes(group=Species))+xlab("Zone")+ylab("Fraction Crustacean")+ facet_grid(col= vars(Site))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,16))+ ylim(0,1) + theme_better
+plot(g_non_in)
+```
+```{r}
+mid.in <- filter(adjusted, Zone == "M")
+non.mono.anova<- aov(Crustaceans~Species + Site + Species*Site , data = mid.in)
+summary(non.mono.anova)
+
+zm.in <- filter(adjusted, Species == "ZM")
+non.zm.anova<- aov(Crustaceans~Site + Zone +Site*Zone, data = zm.in)
+summary(non.zm.anova)
+
+zj.in <- filter(adjusted, Species == "ZJ")
+non.zj.anova<- aov(Crustaceans~ Site + Zone  +Site*Zone , data = zj.in)
+summary(non.zj.anova)
+
+```
+
+
+Experimental Biomass 
+  Statistics
+  This is where everything is separtated by monocultures and then by the species. 
+```{r}
+b.mass <- read.csv("Biomass.csv")
+biomass <- separate(b.mass, col=site, into = c('Site', 'Zone', 'Number', 'Species'))
+
+b.mono <- filter(biomass, condition != "mixture")
+b.mono.aov<- aov(log(GRAMS)~Site*Zone*Species, data = b.mono)
+summary(b.mono.aov)
+
+b.zm <- filter(biomass, Species == "ZM")
+b.zm.anova<- aov(log(GRAMS)~Site*Zone*condition, data = b.zm)
+summary(b.zm.anova)
+
+b.zj <- filter(biomass, Species == "ZJ")
+b.zj.anova.l<- aov(log(GRAMS+0.01)~Site*Zone*condition, data = b.zj)
+summary(b.zj.anova.l)
+```
+
+```{r}
+sp.mono<-filter(bio.mono, Site == "SP")
+bio.sp<-aov(GRAMS~Zone * Species, data =sp.mono)
+summary(bio.sp)
+#bio.comp<- emmeans(bio.sp, specs = pairwise~ Zone:Species)
+#summary(bio.comp)
+bio.comp<- emmeans(bio.sp, specs = pairwise~ Zone|Species)
+summary(bio.comp)
+#bio.comp<- emmeans(bio.sp, specs = pairwise~ Species|Zone)
+#summary(bio.comp)
+
+
+sv.mono<-filter(bio.mono, Site == "SV")
+bio.sv<-aov(GRAMS~Zone * Species, data =sv.mono)
+summary(bio.sv)
+bio.comp<- emmeans(bio.sv, specs = pairwise~ Zone|Species)
+summary(bio.comp)
+
+```
+
+Post Hoc 
+```{r}
+sph.mono <- filter(bio.mono, Site == "SP" & Zone == "H")
+sph <- t.test(GRAMS ~ Species, data = sph.mono)
+sph 
+
+spm.mono <- filter(bio.mono, Site == "SP" & Zone == "M")
+spm <-  t.test(GRAMS ~ Species, data = spm.mono)
+spm
+
+spl.mono <- filter(bio.mono, Site == "SP" & Zone == "L")
+spl <- t.test(GRAMS ~ Species, data = spl.mono)
+spl
+
+
+svh.mono <- filter(bio.mono, Site == "SV" & Zone == "H")
+svh <- t.test(GRAMS ~ Species, data = svh.mono)
+svh
+
+svm.mono <- filter(bio.mono, Site == "SV" & Zone == "M")
+svm <- t.test(GRAMS ~ Species, data = svm.mono)
+svm
+
+svl.mono<- filter(bio.mono, Site == "SV" & Zone == "L")
+svl <-t.test(GRAMS ~ Species, data = svl.mono)
+svl
+
+
+```
+
+  This bar graph for the biomass 
+```{r}
+bmass<- biomass %>%
+  unite("Species.Comp", Species:condition)
+biomass.2 <- cbind(bmass, Species=biomass$Species)
+biomass.2$Species.Comp <- factor(biomass.2$Species.Comp, levels =c('ZJ_zj', 'ZJ_mixture', 'ZM_mixture', 'ZM_zm') )
+biomass.2$Zone <- factor(biomass.2$Zone, levels =c('H', 'M', 'L'))
+
+bio_mean<- biomass.2 %>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(GRAMS, na.rm = T), n = length(GRAMS)-sum(is.na(GRAMS)), 
+            sd = sd(GRAMS, na.rm = T), se= sd/sqrt(n) )
+g_bio<- ggplot(bio_mean, aes(x=Species.Comp, y= mean, fill=Species,color= Species, group = Species))+geom_bar(stat="identity", position='dodge' )+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5, position='dodge', color= Species))+ xlab("Condition")+ylab("Biomass")+ facet_grid(cols=vars(Zone), rows= vars(Site))+  scale_x_discrete(labels=c("Zj mono","Zj mix","Zm mix", "Zm mono"))
+plot(g_bio)
+```
+
+  box plot
+```{r}
+g_bio<- ggplot(bio_mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25,aes(linetype=Species.Comp), show.legend = FALSE) + xlab("Zone")+ylab("Dry Eelgrass Biomass (g) / 0.25m2")+ facet_grid(col= vars(Site), row = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture")) + scale_linetype_manual(values=c("solid", "dashed", "dashed","solid"))+ theme_better 
+plot(g_bio)
+
+```
+
+  Size effect of biomass need to do a three way ANOVA
+  looks at competitve effect 
+  - biomass of competitor by effect size 
+```{r}
+library(esc)
+effect.size <- read.csv(file ="effectsize.csv")
+calc.effect<- esc_mean_sd(grp1m = effect.size$Mean.Mono, grp2m = effect.size$Mean.Mix, 
+            grp1sd = effect.size$Sd.Mono, grp2sd = effect.size$Sd.Mix, 
+            grp1n = 6, grp2n = 6)
+
+#comp_mean<- effect.size %>%
+  #group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  #summarise(mean = mean(GRAMS, na.rm = T), n = length(GRAMS)-sum(is.na(GRAMS)), 
+            #sd = sd(GRAMS, na.rm = T), se= sd/sqrt(n) )
+
+e.size <- cbind(effect.size, "Effect.size" =calc.effect$es, "Weight" = calc.effect$w, "se" = calc.effect$se)
+e.size
+model.main<-lm(Effect.size~Species + Zone + Site , weights = Weight, data = e.size)
+summary(model.main)
+model.interaction <- lm(Effect.size~Species * Zone * Site , weights = Weight, data = e.size)
+summary(model.interaction)
+
+
+
+efect.by.comp<- ggplot(e.size,aes(x=Competitor.Mass, y=Effect.size, group=Species))+  geom_errorbar(aes(ymax = Effect.size+se, ymin = Effect.size-se, width= 0.5))+ geom_errorbarh(aes(xmax = Competitor.Mass+Competitor.se, xmin = Competitor.Mass - Competitor.se)) + geom_point(stat="identity", aes(color=Species), size = 3) + scale_color_manual(values = c ("white", "black"))+ theme_better + xlab("Competitor Mass (g)")+ ylab(" Competition Effect Size")
+effect.g<- efect.by.comp + geom_point(shape = 21, size = 3)
+effect.g
+``` 
+
+
+REDO OF BIOMASS SUMMED ACROSSED ALL MEASUREMENTS 
+
+  Statistics
+  This is where everything is separtated by monocultures and then by the species. 
+```{r}
+b.mass <- read.csv("biomass.sums.22.csv")
+b.mass<- na.omit(b.mass)
+biomass <- separate(b.mass, col=Site, into = c('Site', 'Zone', 'Number', 'Species'))
+
+b.mono <- filter(biomass, Condition != "mixture")
+b.mono.aov<- aov(log(total.biomass)~Site*Zone*Species, data = b.mono)
+summary(b.mono.aov)
+
+b.zm <- filter(biomass, Species == "ZM")
+b.zm.anova<- aov(log(biomass)~Site*Zone*Condition, data = b.zm)
+summary(b.zm.anova)
+
+b.zj <- filter(biomass, Species == "ZJ")
+b.zj.anova.l<- aov(log(biomass+0.01)~Site*Zone*Condition, data = b.zj)
+summary(b.zj.anova.l)
+```
+
+
+```{r}
+bmass<- biomass %>%
+  unite("Species.Comp", Species:Condition)
+biomass.2 <- cbind(bmass, Species=biomass$Species)
+biomass.2$Species.Comp <- factor(biomass.2$Species.Comp, levels =c('ZJ_monoculture', 'ZJ_mixture', 'ZM_mixture', 'ZM_monoculture') )
+biomass.2$Zone <- factor(biomass.2$Zone, levels =c('H', 'M', 'L'))
+
+bio_mean<- biomass.2 %>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(total.biomass, na.rm = T), n = length(total.biomass)-sum(is.na(total.biomass)), 
+            sd = sd(total.biomass, na.rm = T), se= sd/sqrt(n) )
+
+g_bio<- ggplot(bio_mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25,aes(linetype=Species.Comp), show.legend = FALSE) + xlab("Zone")+ylab("Dry Eelgrass Biomass (g) / 0.25m2")+ facet_grid(col= vars(Site), row = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture")) + scale_linetype_manual(values=c("solid", "dashed", "dashed","solid"))+ theme_better 
+plot(g_bio)
+
+```
+
+Experimental Epiphyte data 
+
+  
+```{r}
+epiphytes<- read.csv("EPH.csv")
+epiphytes<- separate(epiphytes, col=site, into=c( 'Site','Zone', 'Number', 'Species'))
+
+eph.mono <- filter(epiphytes, Condition == "monoculture")
+eph.mono.anova<- aov(log(Standardized)~Site*Zone*Species, data = eph.mono)
+summary(eph.mono.anova)
+
+eph.zm <- filter(epiphytes, Species == "ZM")
+eph.zm.anova<- aov(log(Standardized)~Site*Zone*Condition, data = eph.zm)
+summary(eph.zm.anova)
+
+eph.zj <- filter(epiphytes, Species == "ZJ")
+eph.zj.anova.l<- aov(log(Standardized+0.06250000)~Site*Zone*Condition, data = eph.zj)
+summary(eph.zj.anova.l)
+
+```
+Checking with emmeans
+```{r}
+sp.mono<-filter(eph.mono, Site == "SP")
+eph.sp<-aov(Standardized~Zone * Species, data =sp.mono)
+summary(eph.sp)
+eph.comp<- emmeans(eph.sp, specs = pairwise~ Zone|Species)
+summary(eph.comp)
+
+
+sp.mono<-filter(eph.mono, Site == "SP")
+eph.sp<-aov(Standardized~Zone * Species, data =sp.mono)
+summary(eph.sp)
+eph.comp<- emmeans(eph.sp, specs = pairwise~ Species|Zone)
+summary(eph.comp)
+
+
+sv.mono<-filter(eph.mono, Site == "SV")
+eph.sv<-aov(Standardized~Zone * Species, data =sv.mono)
+summary(eph.sv)
+eph.comp<- emmeans(eph.sv, specs = pairwise~ Species|Zone)
+summary(eph.comp)
+
+```
+
+
+```{r}
+sph.mono <- filter(eph.mono, Site == "SP" & Zone == "H")
+sph <- t.test(Standardized ~ Species, data = sph.mono)
+sph 
+
+spm.mono <- filter(eph.mono, Site == "SP" & Zone == "M")
+spm <-  t.test(Standardized ~ Species, data = spm.mono)
+spm
+
+spl.mono <- filter(eph.mono, Site == "SP" & Zone == "L")
+spl <- t.test(Standardized ~ Species, data = spl.mono)
+spl
+
+
+svh.mono <- filter(eph.mono, Site == "SV" & Zone == "H")
+svh <- t.test(Standardized ~ Species, data = svh.mono)
+svh
+
+svm.mono <- filter(eph.mono, Site == "SV" & Zone == "M")
+svm <- t.test(Standardized ~ Species, data = svm.mono)
+svm
+
+svl.mono<- filter(eph.mono, Site == "SV" & Zone == "L")
+svl <-t.test(Standardized ~ Species, data = svl.mono)
+svl
+```
+  
+  Graphs 
+    this has points 
+```{r}
+eph<-epiphytes %>%
+  unite("Species.Comp", Species:Condition)
+epiphytes.2 <- cbind(eph, Species=epiphytes$Species)
+epiphytes.2$Species.Comp <- factor(epiphytes.2$Species.Comp, levels =c('ZJ_monoculture', 'ZJ_mixture', 'ZM_mixture', 'ZM_monoculture') )
+epiphytes.2$Zone <- factor(epiphytes.2$Zone, levels =c('H', 'M', 'L') )
+
+eph_mean<- epiphytes.2 %>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(Standardized, na.rm = T), n = length(Standardized)-sum(is.na(Standardized)), 
+            sd = sd(Standardized, na.rm = T), se= sd/sqrt(n) )
+
+g_eph<- ggplot(eph_mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, aes(linetype=Species.Comp), show.legend = FALSE)+ xlab("Zone")+ylab("Epiphyte Load per Dry Mass of Eelgrass (g)")+ facet_grid(col= vars(Site), row = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+   scale_linetype_manual(values=c("solid", "dashed", "dashed","solid"))+theme_better
+plot(g_eph)
+```
+
+Experimental Community
+```{r}
+epifauna<- read.csv("adjusted.ef.csv")
+ep.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+ep.stand[,6:12] <- ep.stand[,6:12]/ep.stand$Z.Weight
+
+ep.mono<- filter(ep.stand, Condition == "mono")
+
+perm.m<-adonis2(log1p(ep.mono[,6:12]) ~ Site*Zone*Species,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.mono)
+perm.m
+
+ep.zm <- filter(ep.stand, Species == "ZM")
+perm.zm<-adonis2(log1p(ep.zm[,6:12]) ~ Site*Zone*Condition,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.zm)
+perm.zm
+
+ep.zj <- filter(ep.stand, Species == "ZJ")
+perm.zj<-adonis2(log1p(ep.zj[,6:12]) ~ Site*Zone*Condition,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.zj)
+perm.zj
+```
+
+```{r}
+zm.mono<-filter(ep.mono, Species == "ZM")
+com.zm<-adonis2(log1p(zm.mono[,6:12])~Site*Zone, data =zm.mono, permutations = 9999, 
+       method = "bray")
+com.zm
+com.comp<- pairwise.adonis2(log1p(zm.mono[,6:12]),zm.mono$Site)
+summary(com.comp)
+
+zj.mono<-filter(ep.mono, Species == "ZJ")
+com.zj<-adonis2(zj.mono[,6:12]~Site*Zone, data =zj.mono)
+summary(com.zj)
+com.comp<- emmeans(com.zj, specs = pairwise~Site*Zone)
+summary(com.comp)
+
+
+
+sp.mono<-filter(eph.mono, Site == "SP")
+eph.sp<-aov(Standardized~Zone * Species, data =sp.mono)
+summary(eph.sp)
+eph.comp<- emmeans(eph.sp, specs = pairwise~ Zone|Species)
+summary(eph.comp)
+
+
+
+sv.mono<-filter(ep.mono, Site == "SV")
+eph.sv<-aov(Standardized~Zone * Species, data =sv.mono)
+summary(eph.sv)
+eph.comp<- emmeans(ep.sv, specs = pairwise~ Zone|Species)
+summary(eph.comp)
+```
+My little post hoc test separating by site and elevation to test the three way 
+for the monocultures. 
+
+  these are corrected using the Bonferroni Correction (0.05/6) (typical p value/
+  number of test). This treshold is 0.008 
+```{r}
+sph.mono <- filter(ep.mono, Site == "SP" & Zone == "H")
+perm.sph <- adonis(log1p(sph.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= sph.mono)
+perm.sph 
+
+spm.mono <- filter(ep.mono, Site == "SP" & Zone == "M")
+perm.spm <- adonis(log1p(spm.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= spm.mono)
+perm.spm
+
+spl.mono <- filter(ep.mono, Site == "SP" & Zone == "L")
+perm.spl <- adonis(log1p(spl.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= spl.mono)
+perm.spl
+
+
+svh.mono <- filter(ep.mono, Site == "SV" & Zone == "H")
+perm.svh <- adonis(log1p(svh.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svh.mono)
+perm.svh
+
+svm.mono <- filter(ep.mono, Site == "SV" & Zone == "M")
+perm.svm <- adonis(log1p(svm.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svm.mono)
+perm.svm
+
+svl.mono <- filter(ep.mono, Site == "SV" & Zone == "L")
+perm.svl <- adonis(log1p(svl.mono[,6:12]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svl.mono)
+perm.svl
+
+```
+ Results show that species is only statstically significant at SVM and SVL 
+
+making NMDS plots -- separated by site 
+```{r}
+epifauna<- read.csv("adjusted.ef.csv")
+ep.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+ep.stand[,6:12] <- ep.stand[,6:12]/ep.stand$Z.Weight
+
+sp.ef <- filter(ep.stand, Site == "SP")
+sp.ef.g<- unite(sp.ef, "Species.comp", c("Species", "Condition"))
+sp.ef.g <- add_column(sp.ef.g, Species =sp.ef$Species, .after = 1) 
+sp.ef.g<- sp.ef.g %>%
+  group_by(`Zone`,`Species`, `Species.comp`)
+ep.model.mds.1<-metaMDS(sp.ef.g[,6:12]^1/4, dist="bray", k=2, try=40, data = sp.ef.g)
+sp.samplescores.df<-scores(ep.model.mds.1)
+sp <- cbind(sp.ef.g,sp.samplescores.df)
+
+
+sp.observation<- ggplot(sp, aes(x=NMDS1, y=NMDS2, color=Species, shape=Species.comp))+geom_point()+ scale_shape_manual(values = c(15,22 ,16, 21, 17, 24))
+plot(sp.observation)
+
+stressplot(ep.model.mds.1)
+ordiplot(ep.model.mds.1,display='si', type = 'n', main = "Stackpole")
+```
+```{r}
+sp.ef <- filter(ep.stand, Site == "SP")
+
+sp.model.mds.1<-metaMDS(sp.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sp.ef)
+sp.samplescores.df<-scores(sp.model.mds.1)
+sp<- cbind(ep.stand[1:72,1:5],sp.samplescores.df)
+sp.ef.g<- unite(sp, "Zone.comp", c("Zone", "Condition"))
+
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Species, shape=Zone.comp))+geom_point()+ scale_shape_manual(values = c(15,22 ,16, 21, 17, 24))+theme_better+ ggtitle("Stackpole")
+
+plot(sp.observation)
+```
+Stackpole zones with color 
+```{r}
+sp.ef <- filter(ep.stand, Site == "SP")
+
+sp.model.mds.1<-metaMDS(sp.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sp.ef)
+sp.samplescores.df<-scores(sp.model.mds.1)
+sp<- cbind(ep.stand[1:72,1:5],sp.samplescores.df)
+sp.ef.g<- unite(sp, "Species.comp", c("Species", "Condition"))
+sp.ef.g$Species.comp <- factor(sp.ef.g$Species.comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone, shape=Species.comp))+geom_point()+ scale_shape_manual(values = c(24, 21, 17,16 ), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture") )+theme_better+ ggtitle("Stackpole")+ stat_ellipse(aes(x=NMDS1, y=NMDS2,color=Zone), level=0.95)
+plot(sp.observation)
+
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21, 24, 17,16 ), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture") )+theme_better+ ggtitle("Stackpole")+ stat_ellipse(aes(x=NMDS1, y=NMDS2,color=Zone), level=0.95)
+plot(sp.observation)
+```
+
+
+```{r}
+sv.ef <- filter(ep.stand, Site == "SV")
+
+sv.model.mds.1<-metaMDS(sv.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sv.ef)
+sv.samplescores.df<-scores(sv.model.mds.1)
+sv <- cbind(ep.stand[73:140,1:5],sv.samplescores.df)
+sv.ef.g<- unite(sv, "Zone.comp", c("Zone", "Condition"))
+
+sv.observation<- ggplot(sv.ef.g, aes(x=NMDS1, y=NMDS2, color=Species, shape=Zone.comp))+geom_point()+ scale_shape_manual(values = c(15,22 ,16, 21, 17, 24))+theme_better+ ggtitle("Sloughville")
+
+plot(sv.observation)
+```
+Svloughville zones with color
+```{r}
+sv.ef <- filter(ep.stand, Site == "SV")
+
+
+sv.model.mds.1<-metaMDS(sv.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sv.ef)
+sv.samplescores.df<-scores(sv.model.mds.1)
+sv <- cbind(ep.stand[73:140,1:5],sv.samplescores.df)
+sv.ef.g<- unite(sv, "Species.comp", c("Species", "Condition"))
+sv.ef.g$Species.comp <- factor(sv.ef.g$Species.comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+
+sv.observation<- ggplot(sv.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+theme_better+ ggtitle("Sloughville") + stat_ellipse() 
+plot(sv.observation)
+```
+
+
+```{r}
+epifauna<- read.csv("adjusted.ef.csv")
+ep.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+ep.stand[,6:12] <- ep.stand[,6:12]/ep.stand$Z.Weight
+sp.ef <- filter(ep.stand, Site == "SP")
+
+sp.model.mds.1<-metaMDS(sp.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sp.ef)
+sp.samplescores.df<-scores(sp.model.mds.1)
+sp <- cbind(sp.ef[,1:5],sp.samplescores.df)
+sp.ef.g<- unite(sp, "Zone.comp", c("Zone", "Condition"))
+
+#sp.observation.1<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Species, shape=Zone.comp))+geom_point()+ scale_shape_manual(values = c(15,22 ,16, 21, 17, 24))
+#legend <- get_legend(sp.observation.1)
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Species, shape=Zone.comp))+geom_point()+ scale_shape_manual(values = c(15,22 ,16, 21, 17, 24))+theme_better
+
+plot(sp.observation)
+
+#final.ef<- grid.arrange(sp.observation, sv.observation, ncol=2)
+
+#final.ef<- grid.arrange(sp.observation, sv.observation, legend, ncol = 3,  widths = c(3, 3, 0.8), height = c(1, 1, 1))
+#final.ef
+```
+```{r}
+ef.groups<-read.csv("ad.group.ef.csv")
+ef.groups<- separate(ef.groups, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+
+t.ef.groups<- gather(ef.groups, key="Group.type", value="Abundance", 6:9)
+```
+
+  Crustaceans 
+```{r}
+crust.mono <- filter(t.ef.groups, Condition == "mono", Group.type == "ad.crustaceans" )
+crust.mono.anova<- aov(log1p(Abundance)~Site*Zone*Species, data = crust.mono)
+summary(crust.mono.anova)
+
+crust.zm <- filter(t.ef.groups, Species == "ZM", Group.type == "ad.crustaceans")
+crust.zm.anova<- aov(log1p(Abundance)~Site*Zone*Condition, data = crust.zm)
+summary(crust.zm.anova)
+
+crust.zj <- filter(t.ef.groups, Species == "ZJ", Group.type == "ad.crustaceans")
+crust.zj.anova<- aov(log1p(Abundance)~Site*Zone*Condition, data = crust.zj)
+summary(crust.zj.anova)
+
+sp.mono<-filter(crust.mono, Site == "SP")
+crust.sp<-aov(log1p(Abundance)~Zone * Species, data =sp.mono)
+summary(crust.sp)
+crust.comp<- emmeans(crust.sp, specs = pairwise~ Zone|Species)
+summary(crust.comp)
+
+
+sv.mono<-filter(crust.mono, Site == "SV")
+crust.sv<-aov(log1p(Abundance)~Zone * Species, data =sv.mono)
+summary(crust.sv)
+crust.comp<- emmeans(crust.sv, specs = pairwise~ Zone|Species)
+summary(crust.comp)
+
+#zm.mono<-filter(crust.mono, Species == "ZM")
+#crust.zm<-aov(log1p(Abundance)~Site*Zone, data =zm.mono)
+#com.zm<-emmeans(crust.zm, specs = pairwise~ Site|Zone)
+#com.zm
+
+
+#zj.mono<-filter(crust.mono, Species == "ZJ")
+#crust.zj<-aov(log1p(Abundance)~Site*Zone, data =zj.mono)
+#com.zj<- emmeans(crust.zj, specs = pairwise~Zone|Site)
+#com.zj
+
+
+``` 
+  
+  Mollusc 
+```{r}
+moll.mono <- filter(t.ef.groups, Condition == "mono", Group.type == "ad.mollusc" )
+moll.mono.anova<- aov(log1p(Abundance)~Site*Zone*Species, data = moll.mono)
+summary(moll.mono.anova)
+
+moll.zm <- filter(t.ef.groups, Species == "ZM", Group.type == "ad.mollusc")
+moll.zm.anova<- aov(log1p(Abundance)~Site*Zone*Condition, data = moll.zm)
+summary(moll.zm.anova)
+
+moll.zj <- filter(t.ef.groups, Species == "ZJ", Group.type == "ad.mollusc")
+moll.zj.anova<- aov(log1p(Abundance)~Site*Zone*Condition, data = moll.zj)
+summary(moll.zj.anova)
+
+sp.mono<-filter(moll.mono, Site == "SP")
+moll.sp<-aov(log1p(Abundance)~Zone * Species, data =sp.mono)
+summary(moll.sp)
+moll.comp<- emmeans(moll.sp, specs = pairwise~ Zone|Species)
+summary(moll.comp)
+
+
+
+sv.mono<-filter(moll.mono, Site == "SV")
+moll.sv<-aov(log1p(Abundance)~Zone * Species, data =sv.mono)
+summary(moll.sv)
+moll.comp<- emmeans(moll.sv, specs = pairwise~ Zone|Species)
+summary(moll.comp)
+```
+```{r}
+poly.mono <- filter(t.ef.groups, Condition == "mono", Group.type == "ad.polychates" )
+poly.mono.anova<- aov(log1p(Abundance)~Species + Site + Zone + Species*Zone + Species*Site +Site*Zone +Site*Zone*Species, data = poly.mono)
+summary(poly.mono.anova)
+
+poly.zm <- filter(t.ef.groups, Species == "ZM", Group.type == "ad.polychates")
+poly.zm.anova<- aov(log1p(Abundance)~Condition + Site + Zone + Condition *Zone + Condition*Site +Site*Zone +Site*Zone*Condition, data = poly.zm)
+summary(poly.zm.anova)
+
+poly.zj <- filter(t.ef.groups, Species == "ZJ", Group.type == "ad.polychates")
+poly.zj.anova<- aov(log1p(Abundance)~Condition + Site + Zone + Condition *Zone + Condition*Site +Site*Zone +Site*Zone*Condition, data = poly.zj)
+summary(poly.zj.anova)
+
+```
+```{r}
+oth.mono <- filter(t.ef.groups, Condition == "mono", Group.type == "ad.other" )
+oth.mono.anova<- aov(log1p(Abundance)~Site*Zone*Species, data = oth.mono)
+summary(oth.mono.anova)
+
+oth.zm <- filter(t.ef.groups, Species == "ZM", Group.type == "ad.other")
+oth.zm.anova<- aov(log1p(Abundance)~Site*Zone*Condition, data = oth.zm)
+summary(oth.zm.anova)
+
+oth.zj <- filter(t.ef.groups, Species == "ZJ", Group.type == "ad.other")
+oth.zj.anova<- aov(log1p(Abundance)~Site*Zone*Condition, data = oth.zj)
+summary(oth.zj.anova)
+
+```
+
+
+crustacean three-way
+Model comparison shows that simpler model explains most of the difference 
+```{r}
+crust.m.anova.1 <- lm(log(Abundance)~Site*Zone*Species, data = crust.mono)
+summary(crust.m.anova.1)
+summary(aov(crust.m.anova.1))
+crust.m.anova.2 <- lm(log(Abundance)~Site*Zone+ Site*Species, data = crust.mono)
+summary(crust.m.anova.2)
+summary(aov(crust.m.anova.2))
+anova(crust.m.anova.1,crust.m.anova.2, test="Chisq" )
+```
+
+```{r}
+zj.mono<-filter(crust.mono, Species == "ZJ")
+com.zj<-aov(log(Abundance)~Site*Zone, data =zj.mono)
+summary(com.zj)
+com.comp<- emmeans(com.zj, specs = pairwise~Site|Zone)
+#summary(com.comp)
+
+
+zm.mono<-filter(crust.mono, Species == "ZM")
+com.zm<-aov(log(Abundance)~Site*Zone, data =zm.mono)
+summary(com.zm)
+com.comp<- emmeans(com.zm, specs = pairwise~Zone|Site)
+summary(com.comp)
+```
+
+```{r}
+sph.mono <- filter(crust.mono, Site == "SP" & Zone == "H")
+sph <- t.test(log1p(Abundance) ~ Species, data = sph.mono)
+sph 
+
+spm.mono <- filter(crust.mono, Site == "SP" & Zone == "M")
+spm <-  t.test(log1p(Abundance) ~ Species, data = spm.mono)
+spm
+
+spl.mono <- filter(crust.mono, Site == "SP" & Zone == "L")
+spl <- t.test(log1p(Abundance) ~ Species, data = spl.mono)
+spl
+
+
+svh.mono <- filter(crust.mono, Site == "SV" & Zone == "H")
+svh <- t.test(log1p(Abundance) ~ Species, data = svh.mono)
+svh
+
+svm.mono <- filter(crust.mono, Site == "SV" & Zone == "M")
+svm <- t.test(log1p(Abundance)~ Species, data = svm.mono)
+svm
+
+svl.mono<- filter(crust.mono, Site == "SV" & Zone == "L")
+svl <-t.test(log1p(Abundance) ~ Species, data = svl.mono)
+svl
+```
+mollusc three-way 
+```{r}
+sph.mono <- filter(moll.mono, Site == "SP" & Zone == "H")
+sph <- t.test(log1p(Abundance) ~ Species, data = sph.mono)
+sph 
+
+spm.mono <- filter(moll.mono, Site == "SP" & Zone == "M")
+spm <-  t.test(log1p(Abundance) ~ Species, data = spm.mono)
+spm
+
+spl.mono <- filter(moll.mono, Site == "SP" & Zone == "L")
+spl <- t.test(log1p(Abundance) ~ Species, data = spl.mono)
+spl
+
+
+svh.mono <- filter(moll.mono, Site == "SV" & Zone == "H")
+svh <- t.test(log1p(Abundance) ~ Species, data = svh.mono)
+svh
+
+svm.mono <- filter(moll.mono, Site == "SV" & Zone == "M")
+svm <- t.test(log1p(Abundance)~ Species, data = svm.mono)
+svm
+
+svl.mono<- filter(moll.mono, Site == "SV" & Zone == "L")
+svl <-t.test(log1p(Abundance) ~ Species, data = svl.mono)
+svl
+```
+
+Total Abundance 
+```{r}
+ex.total<- mutate(ep.stand, total=rowSums((ep.stand[6:12])))
+
+
+tot.mono<- filter(ex.total, Condition == "mono")
+tot.m.anova <- aov(log(total)~Site*Zone*Species, data = tot.mono)
+summary(tot.m.anova)
+
+tot.zm <- filter(ex.total, Species == "ZM")
+tot.zm.anova <- aov(log(total)~Site*Zone*Condition, data = tot.zm)
+summary(tot.zm.anova)
+
+tot.zj <- filter(ex.total, Species == "ZJ")
+tot.zj.anova <- aov(log(total)~Site*Zone*Condition, data = tot.zj)
+summary(tot.zj.anova)
+
+
+```
+
+Model comparisson 
+```{r}
+#tot.m.anova.1 <- lm(log(total)~Site*Zone*Species, data = tot.mono)
+#summary(tot.m.anova.1)
+#summary(aov(tot.m.anova.1))
+#tot.m.anova.2 <- lm(log(total)~Site*Zone+ Site*Species, data = tot.mono)
+#summary(tot.m.anova.2)
+#summary(aov(tot.m.anova.2))
+#anova(tot.m.anova.1,tot.m.anova.2, test="Chisq" )
+
+
+zj.mono<-filter(tot.mono, Species == "ZJ")
+com.zj<-aov(log(total)~Site*Zone, data =zj.mono)
+summary(com.zj)
+com.comp<- emmeans(com.zj, specs = pairwise~Zone|Site)
+summary(com.comp)
+
+
+zm.mono<-filter(tot.mono, Species == "ZM")
+com.zm<-aov(log(total)~Site*Zone, data =zm.mono)
+summary(com.zm)
+com.comp<- emmeans(com.zm, specs = pairwise~Zone|Site)
+summary(com.comp)
+
+
+sp.mono<-filter(tot.mono, Site == "SP")
+tot.sp<-aov(log(total)~Zone * Species, data =sp.mono)
+summary(tot.sp)
+tot.comp<- emmeans(tot.sp, specs = pairwise~ Species|Zone)
+summary(tot.comp)
+
+
+sv.mono<-filter(tot.mono, Site == "SV")
+tot.sv<-aov(log(total)~Zone * Species, data =sv.mono)
+summary(tot.sv)
+tot.comp<- emmeans(tot.sv, specs = pairwise~ Species|Zone)
+summary(tot.comp)
+```
+
+
+```{r}
+epifauna<- read.csv("adjusted.ef.csv")
+ep.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+ep.stand[,6:12] <- ep.stand[,6:12]/ep.stand$Z.Weight
+ex.total<- mutate(ep.stand, total=rowSums((ep.stand[6:12])))
+
+ex.tot <- ex.total%>%
+  unite("Species.Comp", Species:Condition)
+ex.tot.2 <- cbind(ex.tot, Species=ex.total$Species)
+ex.tot.2$Species.Comp <- factor(ex.tot.2$Species.Comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+ex.tot.2$Zone <- factor(ex.tot.2$Zone, levels =c('H', 'M', 'L'))
+
+tot.mean <- ex.tot.2%>%
+  group_by(`Site`,`Zone`, `Species`, `Species.Comp`) %>%
+  summarise(mean = mean(total, na.rm = T), n = length(total)-sum(is.na(total)), 
+          sd = sd(total, na.rm = T), se= sd/sqrt(n) )
+#g_tot<- ggplot(tot.mean, aes(x=Zone, y= mean, fill= Condition))+ geom_bar(stat="identity", position = "dodge" )+xlab("Zone")+ylab("Average Abundance/g of Eelgrass")+facet_grid(col= vars(Site), rows= vars(Species)) +theme_better+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se), position = position_dodge(),show.legend = FALSE)
+#plot(g_tot)
+
+g_tot<- ggplot(tot.mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, aes(linetype=Species.Comp), show.legend = FALSE)+ xlab("Zone")+ylab("Epifaunal Abundance / Dry Biomass of Eelgrass (g)")+ facet_grid(col= vars(Site), rows = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+ scale_linetype_manual(values=c("solid", "dashed", "dashed","solid"))+theme_better
+plot(g_tot)
+```
+
+ 
+
+```{r}
+sp.mono<-filter(tot.mono, Site == "SP")
+tot.sp<-aov(total~Zone * Species, data =sp.mono)
+summary(tot.sp)
+tot.comp<- emmeans(tot.sp, specs = pairwise~ Zone|Species)
+summary(tot.comp)
+
+
+
+sv.mono<-filter(tot.mono, Site == "SV")
+tot.sv<-aov(total~Zone * Species, data =sv.mono)
+summary(tot.sv)
+tot.comp<- emmeans(tot.sv, specs = pairwise~ Zone|Species)
+summary(tot.comp)
+
+```
+Experimental Non-native 
+  anovas separated by the two questions: looking only at the monocultures and 
+  then looking at the two species. 
+```{r}
+non.native <- read.csv("nonnative.csv")
+
+non.native<- separate(non.native, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+```
+
+
+```{r}
+non.mono <- filter(non.native, Condition == "Mono")
+non.mono.anova<- aov(asin(sqrt(Invasive))~Site*Zone*Species, data = non.mono)
+summary(non.mono.anova)
+
+
+non.zm <- filter(non.native, Species == "ZM")
+non.zm.anova<- aov(asin(sqrt(Invasive))~Site*Zone*Condition, data = non.zm)
+summary(non.zm.anova)
+
+
+non.zj <- filter(non.native, Species == "ZJ")
+non.zj.anova<- aov(asin(sqrt(Invasive))~Site*Zone*Condition, data = non.zj)
+summary(non.zj.anova)
+
+```
+
+```{r}
+sp.mono<-filter(non.mono, Site == "SP")
+tot.sp<-aov(Invasive~Zone * Species, data =sp.mono)
+summary(tot.sp)
+tot.comp<- emmeans(tot.sp, specs = pairwise~ Zone|Species)
+summary(tot.comp)
+
+
+
+sv.mono<-filter(non.mono, Site == "SV")
+tot.sv<-aov(Invasive~Zone * Species, data =sv.mono)
+summary(tot.sv)
+tot.comp<- emmeans(tot.sv, specs = pairwise~ Zone|Species)
+summary(tot.comp)
+
+
+```
+
+
+
+```{r}
+
+glm.mono<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Species, data = non.mono, family = "binomial") 
+summary(glm.mono)
+anova(glm.mono)
+summary(aov(glm.mono))
+
+##these are necessary but are the code for checking
+#glm.mono.2 <- glm(cbind(sum.non.int, sum.native.int )~Site * Zone + Site* Species + Zone*Species, data = non.mono, family = "binomial") 
+
+#anova(glm.mono, glm.mono.2, test="Chisq")
+ 
+glm.zm<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Condition, data = non.zm, family = "binomial") 
+#summary(glm.zm)
+summary(aov(glm.zm))
+
+glm.zm.2<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone + Site* Condition + Zone*Condition, data = non.zm, family = "binomial") 
+
+#anova(glm.zm, glm.zm.2, test="Chisq")
+
+glm.zj<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Condition, data = non.zj, family = "binomial") 
+
+#summary(glm.zj)
+summary(aov(glm.zj))
+
+glm.zj.log<- glm(cbind(log1p(sum.non.int),log1p(sum.native.int) )~Site * Zone* Condition, data = non.zj, family = "binomial") 
+#summary(aov(glm.zj.log))
+glm.zj.2<- glm(cbind(sum.non.int, sum.native.int )~ Site*Zone + Site*Condition+ Zone*Condition, data = non.zj, family = "binomial") 
+#summary(glm.zj.2)
+
+#Model Comparison 
+#anova(glm.zj, glm.zj.2, test="Chisq")
+
+```
+  
+  
+  Generalized linear model
+```{r}
+
+glm.non<- glm(cbind(sum.non, sum.native )~Site * Zone *Species, data = non.native, family = "binomial") 
+summary(glm.non)
+
+glm.non.int<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone, data = non.native, family = "binomial") 
+summary(glm.non.int)
+```
+
+
+
+  Post-Hoc test -- I think this needs to be a t-test so i will come back to it 
+    monocultures --> is species important? 
+```{r}
+
+sph.mono <- filter(non.mono, Site == "SP" & Zone == "H")
+sph <- t.test(Invasive ~ Species, data = sph.mono)
+sph 
+
+spm.mono <- filter(non.mono, Site == "SP" & Zone == "M")
+spm <-  t.test(Invasive ~ Species, data = spm.mono)
+spm
+
+spl.mono <- filter(non.mono, Site == "SP" & Zone == "L")
+spl <- t.test(Invasive ~ Species, data = spl.mono)
+spl
+
+
+svh.mono <- filter(non.mono, Site == "SV" & Zone == "H")
+svh <- t.test(Invasive ~ Species, data = svh.mono)
+svh
+
+svm.mono <- filter(non.mono, Site == "SV" & Zone == "M")
+svm <- t.test(Invasive ~ Species, data = svm.mono)
+svm
+
+svl.mono<- filter(non.mono, Site == "SV" & Zone == "L")
+svl <-t.test(Invasive ~ Species, data = svl.mono)
+svl
+
+```
+
+```{r}
+
+sph.zm <- filter(non.zm, Site == "SP" & Zone == "H")
+sph <- t.test(Invasive ~ Condition, data = sph.zm)
+sph 
+
+spm.zm <- filter(non.zm, Site == "SP" & Zone == "M")
+spm <-  t.test(Invasive ~ Condition, data = spm.zm)
+spm
+
+spl.zm <- filter(non.zm, Site == "SP" & Zone == "L")
+spl <- t.test(Invasive ~ Condition, data = spl.zm)
+spl
+
+
+svh.zm <- filter(non.zm, Site == "SV" & Zone == "H")
+svh <- t.test(Invasive ~ Condition, data = svh.zm)
+svh
+
+svm.zm <- filter(non.zm, Site == "SV" & Zone == "M")
+svm <- t.test(Invasive ~ Condition, data = svm.zm)
+svm
+
+svl.zm<- filter(non.zm, Site == "SV" & Zone == "L")
+svl <-t.test(Invasive ~ Condition, data = svl.zm)
+svl
+
+```
+  Graph for non-native 
+```{r}
+nn<- non.native %>%
+  unite("Species.Comp", Species:Condition)
+non.native.2 <- cbind(nn, Species=non.native$Species)
+non.native.2$Species.Comp <- factor(non.native.2$Species.Comp, levels =c('ZJ_Mono', 'ZJ_Mix', 'ZM_Mix', 'ZM_Mono'))
+non.native.2$Zone <- factor(non.native.2$Zone, levels =c('H', 'M', 'L'))
+
+non_mean<- non.native.2 %>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(Invasive, na.rm = T), n = length(Invasive)-sum(is.na(Invasive)), 
+            sd = sd(Invasive, na.rm = T), se= sd/sqrt(n) )
+
+
+```
+
+
+Experimental Crustaceans 
+```{r}
+crustaceans <- read.csv(file="crustacean.csv")
+crustaceans<- separate(crustaceans, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+crustaceans.2<-  crustaceans %>%
+  unite("Species.Comp", Species:Condition)
+crust <- cbind(crustaceans.2, Species=crustaceans[,4])
+crust$Species.Comp <- factor(crust$Species.Comp, levels =c('ZJ_Mono', 'ZJ_Mix', 'ZM_Mix', 'ZM_Mono'))
+crust$Zone <- factor(crust$Zone, levels =c('H', 'M', 'L'))
+
+
+crust_mean<- crust%>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(Crustacean, na.rm = T), n = length(Crustacean)-sum(is.na(Crustacean)), 
+            sd = sd(Crustacean, na.rm = T), se= sd/sqrt(n) )
+
+g_crust<- ggplot(crust_mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, aes(linetype=Species.Comp), show.legend = FALSE)+ xlab("Zone")+ylab("Proportion Crustacean")+ facet_grid(col= vars(Site), rows = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture")) + ylim(0,1)+ scale_linetype_manual(values=c("solid", "dashed", "dashed","solid"))+theme_better
+plot(g_crust)
+```
+```{r}
+crustaceans <- read.csv(file="crustacean.csv")
+crustaceans<- separate(crustaceans, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+crust.mono <- filter(crustaceans, Condition == "Mono")
+crust.mono.anova<- aov(asin(sqrt(Crustacean))~Site*Zone*Species, data = crust.mono)
+summary(crust.mono.anova)
+
+crust.mono.anova.1<- aov(Crustacean~Site*Zone*Species, data = crust.mono)
+summary(crust.mono.anova.1)
+
+crust.zm <- filter(crustaceans, Species == "ZM")
+crust.zm.anova<- aov(asin(sqrt(Crustacean))~Site*Zone +Site*Zone*Condition, data = crust.zm)
+summary(crust.zm.anova)
+
+crust.zj <- filter(crustaceans, Species == "ZJ")
+crust.zj.anova<- aov(asin(sqrt(Crustacean))~Site*Zone*Condition, data = crust.zj)
+summary(crust.zj.anova)
+```
+
+
+Ampithoe valida 
+```{r}
+epifauna<- read.csv("adjusted.ef.csv")
+ep.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+ep.stand[,6:12] <- ep.stand[,6:12]/ep.stand$Z.Weight
+a.valida <- cbind(ep.stand[,1:2], ep.stand[,4:5], Ampithoe.valida=ep.stand[,10])
+
+amp.mono <- filter(a.valida, Condition == "mono")
+amp.mono.anova<- aov(Ampithoe.valida~Site*Zone*Species, data = amp.mono)
+summary(amp.mono.anova)
+
+amp.zm <- filter(a.valida, Species == "ZM")
+amp.zm.anova<- aov(Ampithoe.valida~Site*Zone*Condition, data = amp.zm)
+summary(amp.zm.anova)
+
+amp.zj <- filter(a.valida, Species == "ZJ")
+amp.zj.anova<- aov(Ampithoe.valida~Site*Zone*Condition, data = amp.zj)
+summary(amp.zj.anova)
+
+```
+
+
+```{r}
+a.valida.2<-  a.valida %>%
+  unite("Species.Comp", Species:Condition)
+ 
+amp.val<- cbind(a.valida.2, Species=a.valida$Species)
+amp.val$Species.Comp <- factor(amp.val$Species.Comp, levels =c('ZJ_mono', 'ZJ_mix', 'ZM_mix', 'ZM_mono'))
+amp.val$Zone <- factor(a.valida$Zone, levels =c('H', 'M', 'L'))
+
+
+amp_mean<- amp.val%>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(Ampithoe.valida, na.rm = T), n = length(Ampithoe.valida)-sum(is.na(Ampithoe.valida)), 
+            sd = sd(Ampithoe.valida,na.rm = T), se= sd/sqrt(n) )
+
+g_amp<- ggplot(amp_mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, aes(linetype=Species.Comp), show.legend = FALSE)+ xlab("Zone")+ylab("A. valida/ g of eelgrass")+ facet_grid(col= vars(Site), rows = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture")) + scale_linetype_manual(values=c("solid", "dashed", "dashed","solid")) +theme_better
+plot(g_amp)
+``` 

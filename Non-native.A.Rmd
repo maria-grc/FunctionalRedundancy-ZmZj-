@@ -1,0 +1,107 @@
+---
+title: "A.valida Non-native"
+author: "Maria Garcia"
+date: "2024-10-29"
+output: html_document
+---
+
+```{r}
+source("library.R")
+```
+
+```{r}
+non.native <- read.csv("data/functional.epifauna.csv")
+
+non.native<- separate(non.native, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+
+non.native$Zone <- factor(non.native$Zone, levels = c("H", "M", "L"))
+
+non.mono <- filter(non.native, Condition == "Mono")
+non.mono.anova<- aov(asin(sqrt(Invaisive.A.valida))~Site*Zone*Species, data = non.mono)
+summary(non.mono.anova)
+# glm.mono<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Species, data = non.mono, family = "binomial") 
+# summary(glm.mono)
+# summary(aov(glm.mono))
+
+
+non.zm <- filter(non.native, Species == "ZM")
+non.zm.anova <-
+  aov(asin(sqrt(Invaisive.A.valida)) ~ Site * Zone * Condition, data = non.zm)
+summary(non.zm.anova)
+
+
+
+# glm.zm<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Condition, data = non.zm, family = "binomial") 
+# summary(glm.zm)
+# summary(aov(glm.zm))
+ 
+
+non.zj <- filter(non.native, Species == "ZJ")
+non.zj.anova<- aov(asin(sqrt(Invaisive.A.valida))~ Site*Zone*Condition, data = non.zj)
+summary(non.zj.anova)
+# glm.zj<- glm(cbind(sum.non.int, sum.native.int )~Site * Zone* Condition, data = non.zj, family = "binomial") 
+# anova(glm.zj)
+# aov(glm.zj)
+# summary(aov(glm.zj))
+# 
+# glm.zj.2<- glm(cbind(sum.non.int, sum.native.int )~ Site*Zone + Site*Condition+ Zone*Condition, data = non.zj, family = "binomial") 
+# summary(glm.zj.2)
+# 
+# anova(glm.zj, glm.zj.2, test="Chisq")
+```
+
+
+```{r}
+
+
+non_mono_mean<- non.mono%>%
+  group_by(`Site`,`Zone`, `Species`)%>%
+  summarise(mean = mean(Invaisive.A.valida, na.rm = T), n = length(Invaisive.A.valida)-sum(is.na(Invaisive.A.valida)), 
+            sd = sd(Invaisive.A.valida, na.rm = T), se= sd/sqrt(n) )
+Site.labels<-  c("SP (steep)", "SV (flat)")
+names(Site.labels)<- c("SP", "SV")
+g_non<- ggplot(non_mono_mean, aes(x=Zone, y= mean, group = Species))+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Proportion of Non-Native Species ")+ facet_grid(col= vars(Site), labeller = labeller(Site = Site.labels))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species, shape = Site), size = 4, )  + scale_shape_manual(values = c(22, 25)) + theme_better
+plot(g_non)
+
+ggsave("figures/non.mono.A.pdf", width = 6.92, height = 4.27)
+```
+```{r}
+library(esc)
+
+non_mean<- non.native%>%
+  group_by(`Site`,`Zone`, `Species`, `Condition`)%>%
+  summarise(mean = mean(Invasive, na.rm = T), n = length(Invasive)-sum(is.na(Invasive)), 
+            sd = sd(Invasive, na.rm = T), se= sd/sqrt(n) )
+
+non.mean.mix <- non_mean %>% filter(Condition == "Mix")
+colnames(non.mean.mix) <- c("Site", "Zone", "Species", "Condition", "mix.mean", 
+             "mix.n", "mix.sd", "mix.se")
+non.mean.mono <- non_mean %>% filter(Condition == "Mono")
+colnames(non.mean.mono) <- c("Site", "Zone", "Species", "Condition", "mono.mean", 
+             "mono.n", "mono.sd", "mono.se")
+non.effect.df <- merge(non.mean.mix, non.mean.mono, by = c("Site", "Zone", "Species"))
+
+
+non.effect<- esc_mean_sd(grp1m = non.effect.df$mono.mean, grp2m = non.effect.df$mix.mean,
+            grp1sd = non.effect.df$mono.sd, grp2sd = non.effect.df$mix.sd, 
+            grp1n = non.effect.df$mono.n, grp2n = non.effect.df$mix.n)
+
+#comp_mean<- effect.size %>%
+  #group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  #summarise(mean = mean(GRAMS, na.rm = T), n = length(GRAMS)-sum(is.na(GRAMS)), 
+            #sd = sd(GRAMS, na.rm = T), se= sd/sqrt(n) )
+
+e.size <- cbind(non.effect.df, "Effect.size" = non.effect$es, "Weight" = non.effect$w, "Lower.CI" = non.effect$ci.lo, "Upper.CI" = non.effect$ci.hi)
+e.size
+```
+
+
+```{r}
+efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Species))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Site))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + scale_shape_manual(values= c(1,16), labels = c("Zj","Zm"))+ theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species), shape =21, size = 4)+ ylim(c(-5.5, 3)) 
+plot(efect.g)
+
+ggsave("figures/non.es.A.pdf", width= 6.92, height = 4.27)
+```
+
+
+

@@ -1,0 +1,134 @@
+---
+title: "FR_epi_abund"
+author: "Maria Garcia"
+date: "2024-02-22"
+output: html_document
+---
+
+```{r}
+source("library.R")
+```
+
+
+```{r}
+epifauna<- read.csv("data/functional.epifauna.csv")
+epi.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+epi.stand$Zone <- factor(epi.stand$Zone, levels = c("H", "M", "L"))
+
+epi.stand[,6:38] <- epi.stand[,6:38]/epi.stand$Z.Weight
+
+ex.total<- mutate(epi.stand, total=rowSums((epi.stand[6:38])))
+```
+
+
+
+```{r}
+tot.mono<- filter(ex.total, Condition == "Mono")
+tot.m.anova <- aov(log(total)~Site*Zone*Species, data = tot.mono)
+summary(tot.m.anova)
+
+tot.zm <- filter(ex.total, Species == "ZM")
+tot.zm.anova <- aov(log(total)~Site*Zone*Condition, data = tot.zm)
+summary(tot.zm.anova)
+
+tot.zj <- filter(ex.total, Species == "ZJ")
+tot.zj.anova <- aov(log(total+0.01)~Site*Zone*Condition, data = tot.zj)
+summary(tot.zj.anova)
+```
+```{r}
+sp.mono<-filter(tot.mono, Site == "SP")
+tot.sp<-aov(log(total)~Zone * Species, data =sp.mono)
+#summary(tot.sp)
+# tot.comp<- emmeans(tot.sp, specs = pairwise~ Zone|Species)
+# summary(tot.comp)
+
+tot.comp<- emmeans(tot.sp, specs = pairwise~Species|Zone)
+summary(tot.comp)
+
+sv.mono<-filter(tot.mono, Site == "SV")
+tot.sv<-aov(log(total)~Zone * Species, data =sv.mono)
+#summary(tot.sv)
+# tot.comp<- emmeans(tot.sv, specs = pairwise~Zone|Species)
+# summary(tot.comp)
+
+tot.comp<- emmeans(tot.sv, specs = pairwise~Species|Zone)
+summary(tot.comp)
+```
+
+```{r}
+tot.mono.mean <- tot.mono%>%
+  group_by(`Site`,`Zone`, `Species`) %>%
+  summarise(mean = mean(total, na.rm = T), n = length(total)-sum(is.na(total)), 
+          sd = sd(total, na.rm = T), se= sd/sqrt(n) )
+Site.labels<-  c("SP (steep)", "SV (flat)")
+names(Site.labels)<- c("SP", "SV")
+g_tot_mono<- ggplot(tot.mono.mean, aes(x=Zone, y= mean, group = Species))+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Epifaunal Abundance / Dry Eelgrass Mass (g)")+ facet_grid(col= vars(Site), labeller = labeller(Site = Site.labels))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+theme_better + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species, shape = Site), size = 4, show.legend = FALSE)  + scale_shape_manual(values = c(22, 25))
+plot(g_tot_mono)
+ggsave("figures/abund.mono.pdf", width = 6.22, height = 4.27)
+``` 
+
+```{r}
+
+tot.mono.mean$Species <- factor(tot.mono.mean$Species, levels = c("ZJ", "ZM"), labels = c("Non-native", "Native")) 
+g_tot<- ggplot(tot.mono.mean, aes(x=Zone, y= mean, group = Site))+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Epifaunal Load")+ facet_grid(col= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75))  +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species, shape = Site), size = 4, show.legend = FALSE) + theme_better + scale_shape_manual(values = c(22, 25)) + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) + guides(fill=guide_legend(override.aes=list(shape=21)))
+plot(g_tot)
+ggsave("figures/abund.mono.2.pdf", width = 6.2, height = 4.27)
+```
+
+
+```{r}
+library(esc)
+
+tot_mean<- ex.total%>%
+  group_by(`Site`,`Zone`, `Species`, `Condition`)%>%
+  summarise(mean = mean(total, na.rm = T), n = length(total)-sum(is.na(total)), 
+            sd = sd(total, na.rm = T), se= sd/sqrt(n) )
+
+tot.mean.mix <- tot_mean %>% filter(Condition == "Mix")
+colnames(tot.mean.mix) <- c("Site", "Zone", "Species", "Condition", "mix.mean", 
+             "mix.n", "mix.sd", "mix.se")
+tot.mean.mono <- tot_mean %>% filter(Condition == "Mono")
+colnames(tot.mean.mono) <- c("Site", "Zone", "Species", "Condition", "mono.mean", 
+             "mono.n", "mono.sd", "mono.se")
+tot.effect.df <- merge(tot.mean.mix, tot.mean.mono, by = c("Site", "Zone", "Species"))
+
+
+tot.effect<- esc_mean_sd(grp1m = tot.effect.df$mono.mean, grp2m = tot.effect.df$mix.mean,
+            grp1sd = tot.effect.df$mono.sd, grp2sd = tot.effect.df$mix.sd, 
+            grp1n = tot.effect.df$mono.n, grp2n = tot.effect.df$mix.n)
+
+#comp_mean<- effect.size %>%
+  #group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  #summarise(mean = mean(GRAMS, na.rm = T), n = length(GRAMS)-sum(is.na(GRAMS)), 
+            #sd = sd(GRAMS, na.rm = T), se= sd/sqrt(n) )
+
+e.size <- cbind(tot.effect.df, "Effect.size" = tot.effect$es, "Weight" = tot.effect$w, "Lower.CI" = tot.effect$ci.lo, "Upper.CI" = tot.effect$ci.hi)
+e.size
+
+```
+
+```{r}
+efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Species))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species), size = 2)+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Site))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + scale_shape_manual(values= c(1,16), labels = c("Zj","Zm"))+ theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species), shape =21, size = 4) + ylim(c(-5.5, 3)) 
+plot(efect.g)
+
+ggsave("figures/abund.es.pdf",  width = 6.92, height = 4.27)
+```
+
+```{r}
+e.size$Species <- factor(e.size$Species, levels = c("ZJ", "ZM"), labels = c("Non-native", "Native")) 
+Species.labels<-  c("Non-native (Zj)", "Native (Zm)")
+names(Species.labels)<- c("Non-native", "Native")
+
+efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Site))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Species),  labeller = labeller(Species = Species.labels))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Site, fill = Species), size = 4, show.legend = FALSE) + ylim(c(-5.5, 3)) + scale_shape_manual(values = c(22, 25)) +  scale_fill_manual(values = c("white", "black")) 
+plot(efect.g) 
+
+ggsave("figures/abund.es.2.pdf", width = 6, height = 4.27)
+```
+
+```{r}
+efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Site))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(row= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Site, fill = Species), size = 4, show.legend = FALSE) + ylim(c(-5.5, 3)) + scale_shape_manual(values = c(22, 25)) +  scale_fill_manual(values = c("white", "black")) 
+plot(efect.g) 
+
+ggsave("figures/abund.es.3.pdf", width = 4.27, height = 6.92)
+```
+

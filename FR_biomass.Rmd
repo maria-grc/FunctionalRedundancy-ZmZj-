@@ -1,0 +1,336 @@
+---
+title: "FR_biomass"
+author: "Maria Garcia"
+date: "2024-02-22"
+output: html_document
+---
+
+```{r}
+source("library.R")
+```
+
+
+```{r}
+b.mass <- read.csv("data/Biomass.csv")
+biomass <- separate(b.mass, col=site, into = c('Site', 'Zone', 'Number', 'Species'))
+
+```
+
+```{r}
+b.mono <- filter(biomass, condition != "mixture")
+b.mono.aov<- aov(log(GRAMS)~Site*Zone*Species, data = b.mono)
+summary(b.mono.aov)
+
+b.zm <- filter(biomass, Species == "ZM")
+b.zm.anova<- aov(log(GRAMS)~Site*Zone*condition, data = b.zm)
+summary(b.zm.anova)
+
+b.zj <- filter(biomass, Species == "ZJ")
+b.zj.anova.l<- aov(log(GRAMS+0.01)~Site*Zone*condition, data = b.zj)
+summary(b.zj.anova.l)
+```
+
+```{r}
+sp.mono<-filter(bio.mono, Site == "SP")
+bio.sp<-aov(GRAMS~Zone * Species, data =sp.mono)
+summary(bio.sp)
+#bio.comp<- emmeans(bio.sp, specs = pairwise~ Zone:Species)
+#summary(bio.comp)
+bio.comp<- emmeans(bio.sp, specs = pairwise~ Zone|Species)
+summary(bio.comp)
+#bio.comp<- emmeans(bio.sp, specs = pairwise~ Species|Zone)
+#summary(bio.comp)
+
+
+sv.mono<-filter(bio.mono, Site == "SV")
+bio.sv<-aov(GRAMS~Zone * Species, data =sv.mono)
+summary(bio.sv)
+bio.comp<- emmeans(bio.sv, specs = pairwise~ Zone|Species)
+summary(bio.comp)
+
+```
+
+Post Hoc 
+```{r}
+sph.mono <- filter(bio.mono, Site == "SP" & Zone == "H")
+sph <- t.test(GRAMS ~ Species, data = sph.mono)
+sph 
+
+spm.mono <- filter(bio.mono, Site == "SP" & Zone == "M")
+spm <-  t.test(GRAMS ~ Species, data = spm.mono)
+spm
+
+spl.mono <- filter(bio.mono, Site == "SP" & Zone == "L")
+spl <- t.test(GRAMS ~ Species, data = spl.mono)
+spl
+
+
+svh.mono <- filter(bio.mono, Site == "SV" & Zone == "H")
+svh <- t.test(GRAMS ~ Species, data = svh.mono)
+svh
+
+svm.mono <- filter(bio.mono, Site == "SV" & Zone == "M")
+svm <- t.test(GRAMS ~ Species, data = svm.mono)
+svm
+
+svl.mono<- filter(bio.mono, Site == "SV" & Zone == "L")
+svl <-t.test(GRAMS ~ Species, data = svl.mono)
+svl
+
+
+```
+
+
+  This bar graph for the biomass 
+```{r}
+bmass<- biomass %>%
+  unite("Species.Comp", Species:condition)
+biomass.2 <- cbind(bmass, Species=biomass$Species)
+biomass.2$Species.Comp <- factor(biomass.2$Species.Comp, levels =c('ZJ_zj', 'ZJ_mixture', 'ZM_mixture', 'ZM_zm') )
+biomass.2$Zone <- factor(biomass.2$Zone, levels =c('H', 'M', 'L'))
+
+bio_mean<- biomass.2 %>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(GRAMS, na.rm = T), n = length(GRAMS)-sum(is.na(GRAMS)), 
+            sd = sd(GRAMS, na.rm = T), se= sd/sqrt(n) )
+g_bio<- ggplot(bio_mean, aes(x=Species.Comp, y= mean, fill=Species,color= Species, group = Species))+geom_bar(stat="identity", position='dodge' )+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5, position='dodge', color= Species))+ xlab("Condition")+ylab("Biomass")+ facet_grid(cols=vars(Zone), rows= vars(Site))+  scale_x_discrete(labels=c("Zj mono","Zj mix","Zm mix", "Zm mono"))
+plot(g_bio)
+```
+
+  box plot
+```{r}
+g_bio<- ggplot(bio_mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25,aes(linetype=Species.Comp), show.legend = FALSE) + xlab("Zone")+ylab("Dry Eelgrass Biomass (g) / 0.25m2")+ facet_grid(col= vars(Site), row = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture")) + scale_linetype_manual(values=c("solid", "dashed", "dashed","solid"))+ theme_better 
+plot(g_bio)
+
+```
+
+  Size effect of biomass need to do a three way ANOVA
+  looks at competitve effect 
+  - biomass of competitor by effect size 
+```{r}
+library(esc)
+effect.size <- read.csv(file ="data/effectsize.csv")
+calc.effect<- esc_mean_sd(grp1m = effect.size$Mean.Mono, grp2m = effect.size$Mean.Mix, 
+            grp1sd = effect.size$Sd.Mono, grp2sd = effect.size$Sd.Mix, 
+            grp1n = 6, grp2n = 6)
+
+#comp_mean<- effect.size %>%
+  #group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  #summarise(mean = mean(GRAMS, na.rm = T), n = length(GRAMS)-sum(is.na(GRAMS)), 
+            #sd = sd(GRAMS, na.rm = T), se= sd/sqrt(n) )
+
+calc.effect.2<- esc_mean_sd(grp1m = effect.size$Mean.Mono, grp2m = effect.size$Mean.Mix, 
+            grp1sd = effect.size$Sd.Mono, grp2sd = effect.size$Sd.Mix, 
+            grp1n = 6, grp2n = 6, es.type = "d")
+
+e.size <- cbind(effect.size, "Effect.size" =calc.effect$es, "Weight" = calc.effect$w, "Lower.CI" = calc.effect$ci.lo, "Upper.CI" = calc.effect$ci.hi)
+e.size
+e.size.2 <- cbind(effect.size, "Effect.size" =calc.effect.2$es, "Weight" = calc.effect.2$w, "Lower.CI" = calc.effect.2$ci.lo, "Upper.CI" = calc.effect.2$ci.hi)
+e.size.2
+model.main<-lm(Effect.size~Species + Zone + Site , weights = Weight, data = e.size)
+summary(model.main)
+model.interaction <- lm(Effect.size~Species * Zone * Site , weights = Weight, data = e.size)
+summary(model.interaction)
+
+
+
+efect.by.comp<- ggplot(e.size,aes(x=Competitor.Mass, y=Effect.size, group=Species))+  geom_errorbar(aes(ymax = Effect.size+se, ymin = Effect.size-se, width= 0.5))+ geom_errorbarh(aes(xmax = Competitor.Mass+Competitor.se, xmin = Competitor.Mass - Competitor.se)) + geom_point(stat="identity", aes(color=Species), size = 3) + scale_color_manual(values = c ("white", "black"))+ theme_better + xlab("Competitor Mass (g)")+ ylab(" Competition Effect Size")
+effect.g<- efect.by.comp + geom_point(shape = 21, size = 3)
+effect.g
+``` 
+
+
+REDO OF BIOMASS SUMMED ACROSSED ALL MEASUREMENTS 
+
+  Statistics
+  This is where everything is separtated by monocultures and then by the species. 
+```{r}
+b.mass <- read.csv("data/biomass.sums.22.csv")
+b.mass<- na.omit(b.mass)
+biomass <- separate(b.mass, col=Site, into = c('Site', 'Zone', 'Number', 'Species'))
+
+b.mono <- filter(biomass, Condition != "mixture")
+b.mono.aov<- aov(log(total.biomass)~Site*Zone*Species, data = b.mono)
+summary(b.mono.aov)
+
+b.zm <- filter(biomass, Species == "ZM")
+b.zm.anova<- aov(log(biomass)~Site*Zone*Condition, data = b.zm)
+summary(b.zm.anova)
+
+b.zj <- filter(biomass, Species == "ZJ")
+b.zj.anova<- aov(log(biomass+0.01)~Site*Zone*Condition, data = b.zj)
+summary(b.zj.anova)
+
+
+test.anova<- aov(log(biomass)~Site*Zone, data = b.zm)
+test<- summary(test.anova)
+
+```
+
+
+```{r}
+bmass<- biomass %>%
+  unite("Species.Comp", Species:Condition)
+biomass.2 <- cbind(bmass, Species=biomass$Species)
+biomass.2$Species.Comp <- factor(biomass.2$Species.Comp, levels =c('ZJ_monoculture', 'ZJ_mixture', 'ZM_mixture', 'ZM_monoculture') )
+biomass.2$Zone <- factor(biomass.2$Zone, levels =c('H', 'M', 'L'))
+
+bio_mean<- biomass.2 %>%
+  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  summarise(mean = mean(total.biomass, na.rm = T), n = length(total.biomass)-sum(is.na(total.biomass)), 
+            sd = sd(total.biomass, na.rm = T), se= sd/sqrt(n) )
+
+g_bio<- ggplot(bio_mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25,aes(linetype=Species.Comp), show.legend = FALSE) + xlab("Zone")+ylab("Dry Eelgrass Biomass (g) / 0.25m2")+ facet_grid(col= vars(Site), row = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture")) + scale_linetype_manual(values=c("solid", "dashed", "dashed","solid"))+ theme_better 
+plot(g_bio)
+
+```
+
+
+```{r}
+sp.mono<-filter(bio_mono, Site == "SP")
+bio.sp<-aov(GRAMS~Zone * Species, data =sp.mono)
+summary(bio.sp)
+bio.comp<- emmeans(bio.sp, specs = pairwise~ Zone:Species)
+#summary(bio.comp)
+bio.comp<- emmeans(bio.sp, specs = pairwise~ Zone|Species)
+summary(bio.comp)
+#bio.comp<- emmeans(bio.sp, specs = pairwise~ Species|Zone)
+#summary(bio.comp)
+
+
+sv.mono<-filter(bio.mono, Site == "SV")
+bio.sv<-aov(GRAMS~Zone * Species, data =sv.mono)
+summary(bio.sv)
+bio.comp<- emmeans(bio.sv, specs = pairwise~ Zone|Species)
+summary(bio.comp)
+```
+
+  Size effect of biomass need to do a three way ANOVA
+  looks at competitve effect 
+  - biomass of competitor by effect size 
+```{r}
+library(esc)
+effect.size <- read.csv(file ="data/effectsize.csv")
+calc.effect<- esc_mean_sd(grp1m = effect.size$Mean.Mono, grp2m = effect.size$Mean.Mix, 
+            grp1sd = effect.size$Sd.Mono, grp2sd = effect.size$Sd.Mix, 
+            grp1n = 6, grp2n = 6)
+
+#comp_mean<- effect.size %>%
+  #group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
+  #summarise(mean = mean(GRAMS, na.rm = T), n = length(GRAMS)-sum(is.na(GRAMS)), 
+            #sd = sd(GRAMS, na.rm = T), se= sd/sqrt(n) )
+
+e.size <- cbind(effect.size, "Effect.size" =calc.effect$es, "Weight" = calc.effect$w, "se" = calc.effect$se, "Lower.CI" = calc.effect$ci.lo, "Upper.CI" = calc.effect$ci.hi)
+e.size
+model.main<-lm(Effect.size~Species + Zone + Site , weights = Weight, data = e.size)
+summary(model.main)
+model.interaction <- lm(Effect.size~Species * Zone * Site , weights = Weight, data = e.size)
+summary(model.interaction)
+
+
+
+efect.by.comp<- ggplot(e.size,aes(x=Competitor.Mass, y=Effect.size, group=Species))+  geom_errorbar(aes(ymax = Effect.size+se, ymin = Effect.size-se, width= 0.5))+ geom_errorbarh(aes(xmax = Competitor.Mass+Competitor.se, xmin = Competitor.Mass - Competitor.se)) + geom_point(stat="identity", aes(fill = Species, shape = Site), size = 3) + scale_shape_manual(values = c (22, 25))+ scale_fill_manual(values = c ("white", "black"))+ theme_better + xlab("Competitor Mass (g)")+ ylab(" Competition Effect Size")
+
+efect.by.comp
+
+effect.g<- efect.by.comp + geom_point(shape = 21, size = 3)
+effect.g
+
+ggsave("figures/biomass.effectsize.pdf")
+``` 
+```{r}
+
+b_mono_mean$Species <- factor(b_mono_mean$Species, levels = c("ZJ", "ZM"), labels = c("Non-native (Zj)", "Native (Zm)"))
+b_mono_mean$Site <- factor(b_mono_mean$Site, levels = c("SP", "SV"), labels = c("SP (steep)", "SV (flat)"))
+Species.labels<-  c("Non-Native (Zj)", "Native (Zm)")
+names(Species.labels)<- c("Non-native", "Native")
+Site.labels<-  c("SP (steep)", "SV (flat)")
+names(Site.labels)<- c("SP", "SV")
+b_mono_mean<- b.mono%>%
+  group_by(`Site`,`Zone`, `Species`)%>%
+  summarise(mean = mean(total.biomass, na.rm = T), n = length(total.biomass)-sum(is.na(total.biomass)), 
+            sd = sd(total.biomass, na.rm = T), se= sd/sqrt(n) )
+b_mono_mean$Zone <- factor(b_mono_mean$Zone, levels =c('H', 'M', 'L') )
+
+g_bio<- ggplot(b_mono_mean, aes(x=Zone, y= mean, group = Species))+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Dry Eelgrass Biomass (g) / 0.25m2")+ facet_grid(col= vars(Site), labeller = labeller(Site = Site.labels))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species, shape = Site), size = 4) + theme_better + scale_shape_manual(values = c(22, 25)) + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm"))
+plot(g_bio)
+
+ggsave("figures/biomass.mono.pdf", width = 6.92, height = 4.27)
+```
+```{r}
+sp.mono<-filter(b.mono, Site == "SP")
+bio.sp<-aov(total.biomass~Zone * Species, data =sp.mono)
+#summary(bio.sp)
+# bio.comp<- emmeans(bio.sp, specs = pairwise~ Zone|Species)
+# summary(bio.comp)
+bio.comp<- emmeans(bio.sp, specs = pairwise~ Species|Zone)
+summary(bio.comp)
+
+
+sv.mono<-filter(b.mono, Site == "SV")
+bio.sv<-aov(total.biomass~Zone * Species, data =sv.mono)
+#summary(bio.sv)
+# bio.comp<- emmeans(bio.sv, specs = pairwise~ Zone|Species)
+# summary(bio.comp)
+
+bio.comp<- emmeans(bio.sv, specs = pairwise~ Species|Zone)
+summary(bio.comp)
+```
+
+
+
+```{r}
+efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Species))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red")+ scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species), shape =21, size = 4) + ylim(c(-5.5, 3)) 
+plot(efect.g) 
+
+ggsave("figures/biomass.es.pdf", width = 6.92, height = 4.27)
+```
+
+
+
+
+```{r}
+efect.g<- ggplot(data.frame(e.size), aes(x=Competitor.Mass, y= -(Effect.size), group = Species))+ geom_errorbar(aes(ymax = -(Effect.size+se), ymin = -(Effect.size-se), width= 0.5))+ylab("Effect Size")+ facet_grid(col= vars(Site))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + scale_shape_manual(values= c(1,16), labels = c("Zj","Zm"))+ theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red")+ scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) +geom_point(stat="identity", aes(fill = Species), shape =21, size = 4) + geom_errorbarh(aes(xmax = Competitor.Mass+Competitor.se, xmin = Competitor.Mass - Competitor.se))
+plot(efect.g) 
+
+ggsave("figures/biomass.es.2.pdf", width = 6.92, height = 4.27)
+```
+
+
+```{r}
+
+e.size$Species <- factor(e.size$Species, levels = c("ZJ", "ZM"), labels = c("Non-native", "Native"))
+
+efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Site))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Species), labeller = labeller(Species = Species.labels))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Site, fill = Species), size = 4, show.legend = FALSE) + ylim(c(-5.5, 3)) + scale_shape_manual(values = c(22, 25)) +  scale_fill_manual(values = c("white", "black")) 
+plot(efect.g) 
+
+ggsave("figures/bio.es.2.pdf", width = 6, height = 4.27)
+```
+
+
+
+```{r}
+
+efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Site))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(row= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Site, fill = Species), size = 4, show.legend = FALSE) + ylim(c(-5.5, 3)) + scale_shape_manual(values = c(22, 25)) +  scale_fill_manual(values = c("white", "black")) 
+plot(efect.g) 
+
+ggsave("figures/bio.es.3.pdf", width = 4.27, height = 6.92)
+```
+
+
+```{r}
+efect.g<- ggplot(data.frame(e.size), aes(x=Competitor.Mass, y= -(Effect.size), group = Species))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5))+ylab("Effect Size")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + scale_shape_manual(values= c(1,16), labels = c("Zj","Zm"))+ theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red")+ scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) + geom_errorbarh(aes(xmax = Competitor.Mass+Competitor.se, xmin = Competitor.Mass - Competitor.se, height = 0.25)) + xlab("Competitor Mass") + geom_point(stat="identity", aes(fill = Species), shape =21, size = 4) + ylim(c(-6, 3))
+plot(efect.g) 
+
+ggsave("figures/biomass.es.3.pdf", width = 6.92, height = 4.27)
+```
+
+Low Zj biomass 
+
+```{r}
+zj.l <- read.csv("data/ZjLow24.csv")
+
+mean.zj.l <- zj.l%>%
+  summarise(mean = mean(weight.g, na.rm = T), n = length(weight.g)-sum(is.na(weight.g)), 
+            sd = sd(weight.g, na.rm = T), se= sd/sqrt(n) )
+```

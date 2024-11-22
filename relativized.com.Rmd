@@ -1,0 +1,268 @@
+---
+title: "community.data.functional.r"
+author: "Maria Garcia"
+date: "2024-01-22"
+output: html_document
+---
+
+```{r}
+source("library.R")
+```
+
+
+
+
+
+```{r}
+epifauna<- read.csv("data/functional.epifauna.csv")
+ep.stand<- separate(epifauna, col=Site, into=c( 'Site','Zone', 'Number', 'Species'))
+ep.stand[,6:38] <- ep.stand[,6:38]/ep.stand$Z.Weight
+
+ep.stand <- cbind(ep.stand[,1:5], decostand( ep.stand[,6:38], method = "max")) 
+
+ep.stand$Zone <- factor(ep.stand$Zone, levels =c('H', 'M', 'L'))
+
+```
+
+
+
+
+```{r}
+ep.mono<- filter(ep.stand, Condition == "Mono")
+rare <- vegtab(ep.mono[,6:38], minval = nrow(ep.mono)*0.05 )
+ep.mono <- cbind(ep.mono[,1:5], rare)
+
+perm.m<-adonis2(ep.mono[,6:ncol(ep.mono)] ~ Site*Zone*Species,
+       permutations = 9999, 
+       method = "bray",
+       data= ep.mono)
+perm.m
+
+mono.model.mds.1<-metaMDS(ep.mono[,6:ncol(ep.mono)], dist="bray", k=2, try=40, data = ep.mono)
+samplescores.df<-vegan::scores(mono.model.mds.1)
+mono<- cbind(ep.mono[,1:5],samplescores.df$sites)
+mono.g<- unite(mono, "Species.comp", c("Species", "Condition"), remove= FALSE)
+mono.g$Species.comp <- factor(mono.g$Species.comp, levels =c('ZJ_Mono', 'ZJ_Mix', 'ZM_Mix', 'ZM_Mono'))
+
+
+mono.obs <-ggplot(mono.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 3, show.legend = FALSE)+ scale_shape_manual(values = c(21,16), name = "Species Composition")+theme_better+ facet_grid(col = vars(Site)) + remove_lab + scale_color_manual(values = c("#b82c39", "#743089", "#2c7fb8"))
+plot(mono.obs)
+
+ggsave("Figures/monoNMDS.pdf")
+```
+
+```{r}
+
+mono.g<- unite(mono, "Species.zone", c("Species", "Zone"), remove= FALSE)
+mono.g$Species.zone <- factor(mono.g$Species.zone, levels =c('ZJ_H', 'ZJ_M', 'ZJ_L', 'ZM_H','ZM_M', 'ZM_L'))
+mono.g$Species <- factor(mono.g$Species, levels = c("ZJ", "ZM"), labels = c ("Non-Native", "Native"))
+
+mono.obs <-ggplot(mono.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Site, fill = Species.zone), size = 3, show.legend = FALSE)+ scale_shape_manual(values = c(22,25), name = "Site")+theme_better+ facet_grid(col = vars(Species)) + remove_lab + scale_color_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+ scale_fill_manual(values = c("white", "white", "white","#b82c39", "#743089", "#2c7fb8")) 
+plot(mono.obs)
+
+ggsave("Figures/monoNMDS.pdf")
+
+mono.obs <-ggplot(mono.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Site, fill = Species.zone), size = 3, show.legend = FALSE)+ scale_shape_manual(values = c(22,25), name = "Site")+theme_better+ facet_grid(col = vars(Species), row = vars(Site)) + remove_lab + scale_color_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+ scale_fill_manual(values = c("white", "white", "white","#b82c39", "#743089", "#2c7fb8")) 
+plot(mono.obs)
+ggsave("Figures/monoNMDS.2.pdf")
+```
+
+
+```{r}
+ep.zm <- filter(ep.stand, Species == "ZM")
+rare <- vegtab(ep.zm[,6:38], minval = nrow(ep.zm)*0.05 )
+ep.zm <- cbind(ep.zm[,1:5], rare)
+
+  
+# perm.zm<-adonis2(ep.zm[,6:ncol(ep.zm)] ~ Site*Zone*Condition,
+#        permutations = 9999, 
+#        method = "bray",
+#        data= ep.zm)
+# perm.zm
+
+zm.model.mds.1<-metaMDS(ep.zm[,6:ncol(ep.zm)], dist="bray", k=2, try=40, data = ep.zm)
+samplescores.df<-vegan::scores(zm.model.mds.1)
+zm<- cbind(ep.zm[,1:5],samplescores.df$sites)
+zm.g<- unite(zm, "Species.comp", c("Species", "Condition"), remove= FALSE)
+zm.g$Species.comp <- factor(zm.g$Species.comp, levels =c('ZJ_Mono', 'ZJ_Mix', 'ZM_Mix', 'ZM_Mono'))
+
+zm.obs <-ggplot(zm.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 3, show.legend =  FALSE)+ scale_shape_manual(values = c(17,16), name = "Species Composition")+theme_better+ facet_grid(col = vars(Site)) + scale_color_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+ remove_lab 
+plot(zm.obs)
+
+ggsave("figures/zmNMDS.pdf")
+```
+
+```{r}
+zm.obs <-ggplot(zm.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Site, fill = Zone), size = 3, show.legend =  FALSE)+ scale_shape_manual(values = c(22,25), name = "Species Composition")+theme_better+ facet_grid(row = vars(Condition)) + scale_color_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+ scale_fill_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+remove_lab 
+plot(zm.obs)
+```
+
+```{r}
+ep.zj <- filter(ep.stand, Species == "ZJ")
+rare <- vegtab(ep.zj[,6:38], minval = nrow(ep.zj)*0.05 )
+ep.zj <- cbind(ep.zj[,1:5], rare)
+good <- c(rowSums(ep.zj[,6:20])>0)
+ep.zj <- ep.zj[good,]
+
+# perm.zj<-adonis2(ep.zj[,6:ncol(ep.zj)] ~ Site*Zone*Condition,
+#        permutations = 9999, 
+#        method = "bray",
+#        data= ep.zj)
+# perm.zj
+
+zj.model.mds.1<-metaMDS(ep.zj[,6:ncol(ep.zj)], dist="bray", k=2, try=40, data = ep.zj)
+samplescores.df<-vegan::scores(zj.model.mds.1)
+zj<- cbind(ep.zj[,1:5],samplescores.df$sites)
+zj.g<- unite(zj, "Species.comp", c("Species", "Condition"), remove= FALSE)
+zj.g$Species.comp <- factor(zj.g$Species.comp, levels =c('ZJ_Mono', 'ZJ_Mix', 'ZM_Mix', 'ZM_Mono'))
+
+zj.obs <-ggplot(zj.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 3, show.legend =  FALSE)+ scale_shape_manual(values = c(21,24), name = "Species Composition")+theme_better+ facet_grid(col = vars(Site)) + scale_color_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+ remove_lab 
+plot(zj.obs)
+
+ggsave("Figures/zjNMDS.pdf", width = 7.29, height = 4.51)
+```
+
+
+```{r}
+zm.g$Species <- factor(zm.g$Species, levels = c("ZJ", "ZM"), labels = c ("Non-Native", "Native"))
+zm.obs <-ggplot(zm.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Site, fill = Zone), size = 3, show.legend =  FALSE)+ scale_shape_manual(values = c(22,25), name = "Species Composition")+theme_better+ facet_grid(col = vars(Condition), rows = vars(Species)) + scale_color_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+ scale_fill_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+remove_lab 
+plot(zm.obs)
+
+zj.g$Species <- factor(zj.g$Species, levels = c("ZJ", "ZM"), labels = c ("Non-Native", "Native"))
+zj.obs <-ggplot(zj.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Site), size = 3, show.legend =  FALSE)+ scale_shape_manual(values = c(22,25), name = "Species Composition")+theme_better+ facet_grid(col = vars(Condition), rows = vars(Species)) + scale_color_manual(values = c("#b82c39", "#743089", "#2c7fb8"))+ remove_lab 
+plot(zj.obs)
+
+p<- arrangeGrob( zm.obs, zj.obs, nrow=2)
+grid.draw(p)
+ggsave("Figures/EpifaunaNMDS.2.pdf",p, width = 7, height = 7)
+```
+
+```{r}
+p<- arrangeGrob(mono.obs, zm.obs, zj.obs, nrow=3)
+grid.draw(p)
+ggsave("Figures/EpifaunaNMDS.pdf",p)
+```
+
+
+```{r}
+sp.ef <- filter(ep.stand, Site == "SP")
+rare <- vegtab(sp.ef[,6:38], minval = nrow(sp.ef)*0.05 )
+sp.ef <- cbind(sp.ef[,1:5], rare)
+
+sp.model.mds.1<-metaMDS(sp.ef[,6:12]^1/4, dist="bray", k=2, try=40, data = sp.ef)
+sp.samplescores.df<-vegan::scores(sp.model.mds.1)
+sp<- cbind(ep.stand[1:72,1:5],sp.samplescores.df$sites)
+sp.ef.g<- unite(sp, "Species.comp", c("Species", "Condition"))
+sp.ef.g$Species.comp <- factor(sp.ef.g$Species.comp, levels =c('ZJ_Mono', 'ZJ_Mix', 'ZM_Mix', 'ZM_Mono'))
+
+sp.ef.g[-34, ]
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21, 24, 17,16 ), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture") )+theme_better+ ggtitle("Stackpole")+ stat_ellipse(aes(x=NMDS1, y=NMDS2,color=Zone), level=0.95)
+plot(sp.observation)
+
+
+sp.observation<- ggplot(sp.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21, 24, 17,16 ), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture") )+theme_better+ ggtitle("Stackpole")
+plot(sp.observation)
+ggsave("sp.epifauna.community.pdf")
+
+```
+
+
+
+```{r}
+sv.ef <- filter(ep.stand, Site == "SV")
+rare <- vegtab(sv.ef[,6:38], minval = nrow(sv.ef)*0.05 )
+sv.ef <- cbind(sv.ef[,1:5], rare)
+good <- rowSums(sv.ef[,6:18])>0
+sv.ef <- sv.ef[good, ]
+
+sv.model.mds.1<-metaMDS(sv.ef[,6:18]^1/4, dist="bray", k=2, try=40, data = sv.ef)
+sv.samplescores.df<-vegan::scores(sv.model.mds.1)
+sv <- cbind(sv.ef[,1:5],sv.samplescores.df$sites)
+sv.ef.g<- unite(sv, "Species.comp", c("Species", "Condition"))
+sv.ef.g$Species.comp <- factor(sv.ef.g$Species.comp, levels =c('ZJ_Mono', 'ZJ_Mix', 'ZM_Mix', 'ZM_Mono'))
+sv.ef.g$Zone<- factor(sv.ef.g$Zone, levels =c('H', 'M', 'L'))
+
+sv.observation<- ggplot(sv.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+theme_better+ ggtitle("Sloughville")
+plot(sv.observation)
+ggsave("sv.epifauna.community.pdf", width = 7.29, height = 4.51)
+
+sv.observation<- ggplot(sv.ef.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+theme_better+ ggtitle("Sloughville") + stat_ellipse() 
+plot(sv.observation)
+```
+```{r}
+rare <- vegtab(ep.stand[,6:38], minval = nrow(ep.stand)*0.05 )
+ep.stand <- cbind(ep.stand[,1:5], rare)
+good <- rowSums(ep.stand[,6:ncol(ep.stand)])>0
+ep.all <- ep.stand[good, ]
+ep.all$Zone <- factor(ep.all$Zone, levels =c('H', 'M', 'L'))
+
+model.mds.1<-metaMDS(ep.all[,6:ncol(ep.all)], dist="bray", k=2, try=40, data = ep.all)
+samplescores.df<-vegan::scores(model.mds.1)
+all<- cbind(ep.all[,1:5],samplescores.df$sites)
+all.g<- unite(all, "Species.comp", c("Species", "Condition"), remove= FALSE)
+all.g$Species.comp <- factor(all.g$Species.comp, levels =c('ZJ_Mono', 'ZJ_Mix', 'ZM_Mix', 'ZM_Mono'))
+
+all.obs <-ggplot(all.g, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 2.25)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture","Zm monoculture"))+theme_better+ facet_grid(col = vars(Site))
+plot(all.obs)
+
+```
+
+
+```{r}
+all.2 <- all.g[-(112),]
+all.obs <-ggplot(all.2, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 3, show.legend =  TRUE)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture","Zm monoculture"))+theme_better+ facet_grid(col = vars(Site)) + remove_lab+ scale_color_manual(values = c("#c4e414", "#7fcdbb", "#2c7fb8"))
+plot(all.obs)
+
+all.obs <-ggplot(all.2, aes(x=NMDS1, y=NMDS2, color=Zone))+geom_point(aes(shape=Species.comp), size = 3, show.legend =  FALSE)+ scale_shape_manual(values = c(21,24,17,16), name = "Species Composition")+theme_better+ facet_grid(col = vars(Site)) + remove_lab+ scale_color_manual(values = c("#c4e414", "#7fcdbb", "#2c7fb8"))
+plot(all.obs)
+ggsave("Figures/allNMDS.pdf")
+```
+
+
+these are corrected using the Bonferroni Correction (0.05/6) (typical p value/
+  number of test). This treshold is 0.008 
+```{r}
+sph.mono <- filter(ep.mono, Site == "SP" & Zone == "H")
+perm.sph <- adonis2(log1p(sph.mono[,6:ncol(ep.mono)]) ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= sph.mono)
+perm.sph 
+
+spm.mono <- filter(ep.mono, Site == "SP" & Zone == "M")
+perm.spm <- adonis2(spm.mono[,6:ncol(ep.mono)] ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= spm.mono)
+perm.spm
+
+spl.mono <- filter(ep.mono, Site == "SP" & Zone == "L")
+perm.spl <- adonis2(spl.mono[,6:ncol(ep.mono)] ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= spl.mono)
+perm.spl
+
+
+svh.mono <- filter(ep.mono, Site == "SV" & Zone == "H")
+perm.svh <- adonis2(svh.mono[,6:ncol(ep.mono)]~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svh.mono)
+perm.svh
+
+svm.mono <- filter(ep.mono, Site == "SV" & Zone == "M")
+perm.svm <- adonis2(svm.mono[,6:ncol(ep.mono)] ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svm.mono)
+perm.svm
+
+svl.mono <- filter(ep.mono, Site == "SV" & Zone == "L")
+perm.svl <- adonis2(svl.mono[,6:ncol(ep.mono)] ~ Species,
+       permutations = 9999, 
+       method = "bray",
+       data= svl.mono)
+perm.svl
+
+```
