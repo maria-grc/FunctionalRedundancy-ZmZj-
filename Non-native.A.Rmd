@@ -103,5 +103,7 @@ plot(efect.g)
 ggsave("figures/non.es.A.pdf", width= 6.92, height = 4.27)
 ```
 
+```{r}
 
-
+render( encoding = encoding, output_dir = "html") 
+```

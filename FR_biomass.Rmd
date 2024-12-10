@@ -283,7 +283,7 @@ summary(bio.comp)
 efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Species))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red")+ scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm")) +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species), shape =21, size = 4) + ylim(c(-5.5, 3)) 
 plot(efect.g) 
 
-ggsave("figures/biomass.es.pdf", width = 6.92, height = 4.27)
+#ggsave("figures/biomass.es.pdf", width = 6.92, height = 4.27)
 ```
 
 

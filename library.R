@@ -23,7 +23,8 @@ library(emmeans)
 theme_better <- theme_bw() + 
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
           axis.title = element_text(size = 14), axis.text=element_text(size=12),
-        text = element_text(color = "black"))
+        text = element_text(color = "black"), strip.text = element_text(
+          size = 12))
 
 remove_lab <- theme(axis.text.x=element_blank(), 
                     axis.ticks.x=element_blank(), 
@@ -31,3 +32,6 @@ remove_lab <- theme(axis.text.x=element_blank(),
                     axis.ticks.y=element_blank()) 
 
 library(labdsv)
+
+
+

@@ -78,30 +78,6 @@ svl
 ```
   
   Graphs 
-    this has points 
-```{r}
-eph<-epiphytes %>%
-  unite("Species.Comp", Species:Condition)
-epiphytes.2 <- cbind(eph, Species=epiphytes$Species)
-epiphytes.2$Species.Comp <- factor(epiphytes.2$Species.Comp, levels =c('ZJ_monoculture', 'ZJ_mixture', 'ZM_mixture', 'ZM_monoculture') )
-epiphytes.2$Zone <- factor(epiphytes.2$Zone, levels =c('H', 'M', 'L') )
-
-Species.labels<-  c("Non-native (Zj)", "Native (Zm)")
-names(Species.labels)<- c("ZJ", "ZM")
-Site.labels<-  c("SP (steep)", "SV (flat)")
-names(Site.labels)<- c("SP", "SV")
-
-eph_mean<- epiphytes.2 %>%
-  group_by(`Site`,`Zone`, `Species.Comp`, `Species`)%>%
-  summarise(mean = mean(Standardized, na.rm = T), n = length(Standardized)-sum(is.na(Standardized)), 
-            sd = sd(Standardized, na.rm = T), se= sd/sqrt(n) )
-
-g_eph<- ggplot(eph_mean, aes(x=Zone, y= mean, group = Species.Comp))+geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Species.Comp), size = 2)+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, aes(linetype=Species.Comp), show.legend = FALSE)+ xlab("Zone")+ylab("Epiphyte Load per Dry Mass of Eelgrass (g)")+ facet_grid(col= vars(Site), row = vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + scale_shape_manual(values= c(1,2,17,16), name = "Species Composition", labels = c("Zj monoculture","Zj mixture", "Zm mixture",  "Zm monoculture"))+   scale_linetype_manual(values=c("solid", "dashed", "dashed","solid"))+theme_better
-plot(g_eph)
-```
-
-
-
 ```{r}
 
 
@@ -122,15 +98,7 @@ plot(g_eph)
 ggsave("figures/eph.mono.pdf",  width = 6.92, height = 4.27)
 ```
 
-```{r}
 
-
-eph_mono_mean$Species <- factor(eph_mono_mean$Species, levels = c("ZJ", "ZM"), labels = c("Non-native", "Native"))
-g_eph<- ggplot(eph_mono_mean, aes(x=Zone, y= mean, group = Site))+ geom_errorbar(aes(ymax = mean+se, ymin = mean-se, width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Epiphyte Load")+ facet_grid(col= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75))  +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species, shape = Site), size = 4, show.legend = FALSE) + theme_better + scale_shape_manual(values = c(22, 25)) + scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm") ) + guides(fill=guide_legend(override.aes=list(shape=21)))
-plot(g_eph)
-
-ggsave("figures/eph.mono.2.pdf",  width = 6, height = 4.27)
-```
 
 ```{r}
 library(esc)
@@ -166,30 +134,13 @@ e.size
 ```
 
 
-
 ```{r}
-efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Species))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Site))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(fill = Species), shape =21, size = 4 ) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red")+ ylim(c(-5.5, 3)) +  scale_fill_manual(values = c("white", "black"), labels = c("Zj","Zm"))
-plot(efect.g)
+e.size$Species <- factor(e.size$Species, levels = c("ZJ", "ZM"), labels = c("Non-native", "Native"))
 
-ggsave("figures/eph.es.pdf",width = 6.92, height = 4.27 )
-```
-
-
-```{r}
-Species.labels<-  c("Non-native (Zj)", "Native (Zm)")
-names(Species.labels)<- c("Non-native", "Native")
 efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Site))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(col= vars(Species), labeller = labeller(Species = Species.labels))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Site, fill = Species), size = 4,show.legend = FALSE) + ylim(c(-5.5, 3)) + scale_shape_manual(values = c(22, 25)) +  scale_fill_manual(values = c("white", "black")) 
 plot(efect.g) 
 
-ggsave("figures/eph.es.2.pdf", width = 6, height = 4.27)
+ggsave("figures/eph.es.pdf", width = 6, height = 4.27)
 ```
 
-
-```{r}
-
-efect.g<- ggplot(data.frame(e.size), aes(x=Zone, y= -(Effect.size), group = Site))+ geom_errorbar(aes(ymax = -(Upper.CI), ymin = -(Lower.CI), width= 0.5), position= position_dodge(0.5))+ geom_line(position= position_dodge(0.5), size=0.25, show.legend = FALSE)+ xlab("Zone")+ylab("Effect Size")+ facet_grid(row= vars(Species))+  scale_x_discrete(labels=c("High", "Mid", "Low"))+ theme(axis.text.x = element_text(angle = 45, vjust = 0.75)) + theme_better +geom_hline(yintercept=0, linetype="dashed", color = "red") +geom_point(stat="identity", position= position_dodge(width = 0.5), aes(shape = Site, fill = Species), size = 4, show.legend = FALSE) + ylim(c(-5.5, 3)) + scale_shape_manual(values = c(22, 25)) +  scale_fill_manual(values = c("white", "black")) 
-plot(efect.g) 
-
-ggsave("figures/eph.es.3.pdf", width = 4.27, height = 6.92)
-```
 
